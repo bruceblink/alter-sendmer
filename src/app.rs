@@ -155,6 +155,7 @@ pub struct AlterSendmeApp {
     completed_duration: Duration,
     transfer_started_at: Option<Instant>,
     event_sender: Sender<(u64, TransferEvent)>,
+    root_focus: FocusHandle,
     ticket_focus: FocusHandle,
     generation: u64,
     update_checking: bool,
@@ -195,11 +196,13 @@ struct GitHubAsset {
 
 impl AlterSendmeApp {
     /// Creates a ready-to-use workspace and starts a lightweight event pump.
-    pub fn new(started_at: Instant, cx: &mut Context<Self>) -> Self {
+    pub fn new(started_at: Instant, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (event_sender, event_receiver) = async_channel::unbounded();
         let save_path = directories::UserDirs::new()
             .and_then(|dirs| dirs.download_dir().map(PathBuf::from))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        let root_focus = cx.focus_handle();
+        window.focus(&root_focus, cx);
         let app = Self {
             started_at,
             tab: Tab::Send,
@@ -227,6 +230,7 @@ impl AlterSendmeApp {
             completed_duration: Duration::ZERO,
             transfer_started_at: None,
             event_sender,
+            root_focus,
             ticket_focus: cx.focus_handle(),
             generation: 0,
             update_checking: false,
@@ -1174,6 +1178,8 @@ impl AlterSendmeApp {
         let active = self.tab == tab;
         div()
             .id(label)
+            .focusable()
+            .tab_stop(true)
             .role(A11yRole::Tab)
             .aria_label(label)
             .flex_1()
@@ -1219,6 +1225,8 @@ impl AlterSendmeApp {
         let destructive = id.to_string().contains("stop");
         div()
             .id(id)
+            .focusable()
+            .tab_stop(true)
             .role(A11yRole::Button)
             .aria_label(label.clone())
             .h(px(38.0))
@@ -1277,6 +1285,7 @@ impl AlterSendmeApp {
             self.send_phase,
             TransferPhase::Sharing | TransferPhase::Transporting
         );
+        let show_drop_zone = self.send_phase == TransferPhase::Idle;
         let progress = self.send_progress.clone();
         let selected_label = self
             .selected_path
@@ -1327,49 +1336,53 @@ impl AlterSendmeApp {
                         )),
                 )
             })
-            .child(
-                div()
-                    .id("send-drop-zone")
-                    .role(A11yRole::Button)
-                    .aria_label(self.copy("drop"))
-                    .h(px(190.0))
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_2()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(colors.border)
-                    .bg(colors.panel)
-                    .cursor_pointer()
-                    .on_click(cx.listener(|app, _, _, cx| app.choose_send_path(cx)))
-                    .on_drop::<ExternalPaths>(cx.listener(move |app, paths, _, cx| {
-                        app.on_drop(paths, cx);
-                    }))
-                    .child(div().text_3xl().text_color(colors.accent).child("+"))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(self.copy("drop")),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .child(self.text("sender.orBrowse")),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .truncate()
-                            .max_w(px(660.0))
-                            .child(selected),
-                    ),
-            )
+            .when(show_drop_zone, |view| {
+                view.child(
+                    div()
+                        .id("send-drop-zone")
+                        .focusable()
+                        .tab_stop(true)
+                        .role(A11yRole::Button)
+                        .aria_label(self.copy("drop"))
+                        .h(px(190.0))
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(colors.border)
+                        .bg(colors.panel)
+                        .cursor_pointer()
+                        .on_click(cx.listener(|app, _, _, cx| app.choose_send_path(cx)))
+                        .on_drop::<ExternalPaths>(cx.listener(move |app, paths, _, cx| {
+                            app.on_drop(paths, cx);
+                        }))
+                        .child(div().text_3xl().text_color(colors.accent).child("+"))
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(self.copy("drop")),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted)
+                                .child(self.text("sender.orBrowse")),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted)
+                                .truncate()
+                                .max_w(px(660.0))
+                                .child(selected),
+                        ),
+                )
+            })
             .when(!sharing && !completed && !failed && !preparing, |view| {
                 view.child(self.button(
                     "send-start",
@@ -1424,14 +1437,6 @@ impl AlterSendmeApp {
                             div()
                                 .flex()
                                 .gap_3()
-                                .child(self.button(
-                                    "send-copy",
-                                    self.copy("copy"),
-                                    self.ticket.is_some(),
-                                    colors,
-                                    cx,
-                                    |app, cx| app.copy_ticket(cx),
-                                ))
                                 .child(self.button(
                                     "send-stop",
                                     self.copy("stop"),
@@ -1689,6 +1694,12 @@ impl Render for AlterSendmeApp {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = self.colors(_window.appearance());
         div()
+            .id("alter-sendme-root")
+            .role(A11yRole::Application)
+            .aria_label(self.text("appTitle"))
+            .track_focus(&self.root_focus)
+            .on_action(cx.listener(|_, _: &crate::Tab, window, cx| window.focus_next(cx)))
+            .on_action(cx.listener(|_, _: &crate::TabPrev, window, cx| window.focus_prev(cx)))
             .size_full()
             .flex()
             .flex_col()
@@ -2397,6 +2408,8 @@ fn ticket_input(
     let click_focus = focus.clone();
     div()
         .id("ticket-input")
+        .focusable()
+        .tab_stop(true)
         .role(A11yRole::TextInput)
         .aria_label(app.text("receiver.pasteTicket"))
         .relative()
