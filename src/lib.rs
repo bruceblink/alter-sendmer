@@ -11,6 +11,13 @@ actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 
 /// Starts the native window and installs the same quit bindings used by flash-shot.
 pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
+    // Install a process-wide logger once so sendmer cleanup and connection diagnostics
+    // remain visible without writing tickets or file contents to persistent logs.
+    let _ = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("alter_sendme_gpui=info,sendmer=info"),
+    )
+    .format_timestamp_millis()
+    .try_init();
     rustls::crypto::ring::default_provider()
         .install_default()
         .map_err(|_| "rustls crypto provider was already installed")?;
