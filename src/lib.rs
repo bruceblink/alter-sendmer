@@ -57,12 +57,18 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
             // Keep the entity alive until the app-level quit hook has drained transfer resources.
             let app_for_quit = app.clone();
             cx.on_app_quit(move |cx| {
-                let send_result = app_for_quit.update(cx, |app, _| app.take_shutdown_resources());
+                let (send_result, receive_done) =
+                    app_for_quit.update(cx, |app, _| app.take_shutdown_resources());
                 async move {
-                    if let Some(result) = send_result {
-                        let _ =
-                            tokio::time::timeout(Duration::from_secs(2), result.shutdown()).await;
-                    }
+                    let cleanup = async move {
+                        if let Some(done) = receive_done {
+                            let _ = done.await;
+                        }
+                        if let Some(result) = send_result {
+                            let _ = result.shutdown().await;
+                        }
+                    };
+                    let _ = tokio::time::timeout(Duration::from_secs(2), cleanup).await;
                 }
             })
             .detach();

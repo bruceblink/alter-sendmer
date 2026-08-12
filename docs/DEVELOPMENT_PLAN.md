@@ -39,7 +39,7 @@
 ## M5: 发布与迁移
 
 - 生成 Windows portable ZIP 与 Inno Setup 安装器，保留跨平台 Rust 构建入口。
-- 将默认依赖切到公开 `sendmer` `v0.6.0` Git 标签，确保干净检出可构建。
+- 将默认依赖切到公开 `sendmer` `2d4d6bf5ea79fb184ed70812db84fe4c265f485c` revision，使 GPUI 取消操作复用核心清理路径，并通过干净检出构建。
 - 发布前执行跨项目回归、资产检查和版本一致性校验。
 
 ## 工程化交付

@@ -3,9 +3,10 @@
 use async_channel::Sender;
 use sendmer::{
     AddrInfoOptions, AppHandle, EventEmitter, ReceiveOptions, RelayModeOption, SendOptions,
-    TransferEvent, receive, send,
+    TransferEvent, send,
 };
 use std::{path::PathBuf, sync::Arc};
+use tokio::sync::watch;
 
 /// Non-blocking adapter from sendmer events to the GPUI event loop.
 #[derive(Clone)]
@@ -46,6 +47,7 @@ pub async fn start_receive(
     generation: u64,
     relay_mode: RelayModeOption,
     retry_policy: sendmer::core::options::ReceiveRetryPolicy,
+    cancellation: watch::Receiver<bool>,
 ) -> anyhow::Result<sendmer::ReceiveResult> {
     let options = ReceiveOptions {
         output_dir: Some(output_dir),
@@ -54,7 +56,13 @@ pub async fn start_receive(
         magic_ipv6_addr: None,
         retry_policy,
     };
-    receive(ticket, options, emitter(sender, generation)).await
+    sendmer::receive_with_cancellation(
+        ticket,
+        options,
+        emitter(sender, generation),
+        Some(cancellation),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -68,6 +76,7 @@ mod tests {
     use std::thread;
     use std::time::{Duration, Instant};
     use tempfile::tempdir;
+    use tokio::sync::watch;
 
     const WORKER_MODE: &str = "ALTER_SENDME_TRANSFER_WORKER";
     const SOURCE_PATH: &str = "ALTER_SENDME_TRANSFER_SOURCE";
@@ -134,6 +143,7 @@ mod tests {
                 41,
                 RelayModeOption::Disabled,
                 Default::default(),
+                watch::channel(false).1,
             ))
             .expect("receive through adapter");
         assert!(

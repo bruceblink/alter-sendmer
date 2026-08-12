@@ -11,7 +11,7 @@ readme = "README.md"
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed", rev = "819fe337999551ce8177b14c8db1127645617ae4" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "819fe337999551ce8177b14c8db1127645617ae4", features = ["font-kit"] }
-sendmer = { git = "https://github.com/bruceblink/sendmer.git", tag = "v0.6.0" }
+sendmer = { git = "https://github.com/bruceblink/sendmer.git", rev = "2d4d6bf5ea79fb184ed70812db84fe4c265f485c" }
 iroh-blobs = "0.103"
 tokio = { version = "1", features = ["full"] }
 async-channel = "2"

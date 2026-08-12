@@ -17,10 +17,11 @@ the public `sendmer` 0.6.0 iroh stack directly. Start sharing returns a ticket, 
 validates the ticket before opening the network task. Stop waits for sender shutdown, and failed
 transfers stay in a visible Failed state until `Try again` or `New transfer` is selected.
 
-The application pins the public `sendmer` repository to the `v0.6.0` tag so clean checkouts and
-release builders do not depend on a sibling directory. During local core development, Cargo's
-normal git checkout cache keeps builds reproducible while `F:\project\sendmer` remains the source
-of truth for protocol changes.
+The application pins the public `sendmer` repository to the reviewed
+`2d4d6bf5ea79fb184ed70812db84fe4c265f485c` revision (based on `v0.6.0`) so clean checkouts and
+release builders do not depend on a sibling directory. During local core development, the same
+revision is available from `F:\project\sendmer`, which remains the source of truth for protocol
+changes.
 
 Locale JSON files are bundled under `locales/` and converted into a static lookup table at build
 time, so installed builds do not need the source project or a runtime locale directory.

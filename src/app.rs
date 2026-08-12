@@ -143,7 +143,9 @@ pub struct AlterSendmeApp {
     save_path: PathBuf,
     send_result: Option<SendResult>,
     send_abort: Option<tokio::task::AbortHandle>,
-    receive_abort: Option<tokio::task::AbortHandle>,
+    receive_cancel: Option<tokio::sync::watch::Sender<bool>>,
+    receive_done: Option<tokio::sync::oneshot::Receiver<()>>,
+    receive_task_generation: Option<u64>,
     send_progress: Progress,
     receive_progress: Progress,
     receive_files: Vec<String>,
@@ -218,7 +220,9 @@ impl AlterSendmeApp {
             save_path,
             send_result: None,
             send_abort: None,
-            receive_abort: None,
+            receive_cancel: None,
+            receive_done: None,
+            receive_task_generation: None,
             send_progress: Progress::default(),
             receive_progress: Progress::default(),
             receive_files: Vec::new(),
@@ -852,7 +856,7 @@ impl AlterSendmeApp {
             cx.notify();
             return;
         }
-        if self.receive_phase != TransferPhase::Idle {
+        if self.receive_phase != TransferPhase::Idle || self.receive_done.is_some() {
             return;
         }
         self.generation += 1;
@@ -861,24 +865,38 @@ impl AlterSendmeApp {
         self.transfer_started_at = Some(Instant::now());
         self.status = self.status_text("connecting", "Connecting to sender...");
         self.error = None;
-        let task = tokio::spawn(transfer::start_receive(
-            ticket,
-            self.save_path.clone(),
-            self.event_sender.clone(),
-            generation,
-            if self.preferences.relay == "disabled" {
-                sendmer::RelayModeOption::Disabled
-            } else {
-                sendmer::RelayModeOption::Default
-            },
-            sendmer::core::options::ReceiveRetryPolicy {
-                download_retry_limit: self.preferences.retry_limit,
-                size_fetch_retry_limit: self.preferences.retry_limit,
-                size_fetch_chunk_size: self.preferences.download_limit_mb as u64 * 1024 * 1024,
-                ..Default::default()
-            },
-        ));
-        self.receive_abort = Some(task.abort_handle());
+        let (cancel_sender, cancel_receiver) = tokio::sync::watch::channel(false);
+        let (done_sender, done_receiver) = tokio::sync::oneshot::channel();
+        let output_dir = self.save_path.clone();
+        let events = self.event_sender.clone();
+        let relay_mode = if self.preferences.relay == "disabled" {
+            sendmer::RelayModeOption::Disabled
+        } else {
+            sendmer::RelayModeOption::Default
+        };
+        let retry_policy = sendmer::core::options::ReceiveRetryPolicy {
+            download_retry_limit: self.preferences.retry_limit,
+            size_fetch_retry_limit: self.preferences.retry_limit,
+            size_fetch_chunk_size: self.preferences.download_limit_mb as u64 * 1024 * 1024,
+            ..Default::default()
+        };
+        let task = tokio::spawn(async move {
+            let result = transfer::start_receive(
+                ticket,
+                output_dir,
+                events,
+                generation,
+                relay_mode,
+                retry_policy,
+                cancel_receiver,
+            )
+            .await;
+            let _ = done_sender.send(());
+            result
+        });
+        self.receive_cancel = Some(cancel_sender);
+        self.receive_done = Some(done_receiver);
+        self.receive_task_generation = Some(generation);
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
             let mut cx = cx.clone();
@@ -889,9 +907,19 @@ impl AlterSendmeApp {
                     Err(error) => Err(error.to_string()),
                 };
                 let _ = app.update(&mut cx, |app, cx| {
-                    if app.generation == generation {
-                        app.receive_abort = None;
+                    let owns_task = app.receive_task_generation == Some(generation);
+                    let current_generation = app.generation == generation;
+                    if owns_task {
+                        app.receive_cancel = None;
+                        app.receive_done = None;
+                        app.receive_task_generation = None;
+                    }
+                    if current_generation {
                         app.apply_receive_finished(result, cx);
+                    } else if owns_task && app.receive_phase == TransferPhase::Stopping {
+                        app.receive_phase = TransferPhase::Idle;
+                        app.status = app.status_text("ready", "Ready");
+                        cx.notify();
                     }
                 });
             }
@@ -947,10 +975,10 @@ impl AlterSendmeApp {
 
     fn stop_receiving(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
-        if let Some(abort) = self.receive_abort.take() {
-            abort.abort();
+        if let Some(cancel) = self.receive_cancel.take() {
+            let _ = cancel.send(true);
         }
-        self.receive_phase = TransferPhase::Idle;
+        self.receive_phase = TransferPhase::Stopping;
         self.ticket_input.clear();
         self.ticket_selection = 0..0;
         self.receive_progress = Progress::default();
@@ -962,16 +990,21 @@ impl AlterSendmeApp {
 
     /// Takes ownership of active transfer resources for the app-quit hook.
     ///
-    /// The receive task is aborted immediately, while the sender result is returned so the
-    /// caller can await its ordered router/store cleanup before the process exits.
-    pub(crate) fn take_shutdown_resources(&mut self) -> Option<SendResult> {
+    /// The receive task receives a graceful cancellation request, while both transfer cleanup
+    /// handles are returned so the caller can await their ordered resource release on exit.
+    pub(crate) fn take_shutdown_resources(
+        &mut self,
+    ) -> (
+        Option<SendResult>,
+        Option<tokio::sync::oneshot::Receiver<()>>,
+    ) {
         if let Some(abort) = self.send_abort.take() {
             abort.abort();
         }
-        if let Some(abort) = self.receive_abort.take() {
-            abort.abort();
+        if let Some(cancel) = self.receive_cancel.take() {
+            let _ = cancel.send(true);
         }
-        self.send_result.take()
+        (self.send_result.take(), self.receive_done.take())
     }
 
     fn new_transfer(&mut self, cx: &mut Context<Self>) {
@@ -983,7 +1016,7 @@ impl AlterSendmeApp {
                 | TransferPhase::Stopping
         ) || matches!(
             self.receive_phase,
-            TransferPhase::Connecting | TransferPhase::Transporting
+            TransferPhase::Connecting | TransferPhase::Transporting | TransferPhase::Stopping
         );
         if active {
             self.error = Some(self.text("transfer.wasStopped"));

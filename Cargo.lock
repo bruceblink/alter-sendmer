@@ -6739,7 +6739,7 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 [[package]]
 name = "sendmer"
 version = "0.6.0"
-source = "git+https://github.com/bruceblink/sendmer.git?tag=v0.6.0#39bfa5eeee6481e0d8d795aba6ca6c9361381763"
+source = "git+https://github.com/bruceblink/sendmer.git?rev=2d4d6bf5ea79fb184ed70812db84fe4c265f485c#2d4d6bf5ea79fb184ed70812db84fe4c265f485c"
 dependencies = [
  "anyhow",
  "clap",
