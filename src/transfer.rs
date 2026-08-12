@@ -69,6 +69,8 @@ pub async fn start_receive(
 mod tests {
     use super::{start_receive, start_send};
     use async_channel::unbounded;
+    use iroh::EndpointAddr;
+    use iroh_blobs::{BlobFormat, Hash, ticket::BlobTicket};
     use sendmer::{RelayModeOption, Role, TransferEvent};
     use std::fs;
     use std::io::{Read, Write};
@@ -227,5 +229,52 @@ mod tests {
 
         let received = output_dir.path().join("adapter-e2e.txt");
         assert_eq!(fs::read(received).expect("read received file"), contents);
+    }
+
+    /// Verifies that a caller cancellation reaches sendmer before a receive can connect.
+    #[test]
+    fn adapter_forwards_pre_cancelled_receive_and_cleans_staging() {
+        let output_dir = tempdir().expect("create output directory");
+        let ticket = BlobTicket::new(
+            EndpointAddr::new(iroh::SecretKey::generate().public()),
+            Hash::new(b"gpui-cancellation-test"),
+            BlobFormat::HashSeq,
+        );
+        let staging_prefix = format!(".sendmer-recv-{}-", ticket.hash().to_hex());
+        let before = temp_staging_dirs(&staging_prefix);
+        let (event_sender, _event_receiver) = unbounded();
+        let (_, cancellation) = watch::channel(true);
+        let runtime = tokio::runtime::Runtime::new().expect("create cancellation runtime");
+
+        let error = runtime
+            .block_on(start_receive(
+                ticket.to_string(),
+                output_dir.path().to_path_buf(),
+                event_sender,
+                7,
+                RelayModeOption::Disabled,
+                Default::default(),
+                cancellation,
+            ))
+            .expect_err("pre-cancelled receive should stop before connecting");
+
+        assert_eq!(error.to_string(), "Operation cancelled");
+        assert_eq!(temp_staging_dirs(&staging_prefix), before);
+    }
+
+    /// Lists sendmer receive staging directories so cancellation cleanup can be compared exactly.
+    fn temp_staging_dirs(prefix: &str) -> Vec<std::path::PathBuf> {
+        let mut paths = std::fs::read_dir(std::env::temp_dir())
+            .expect("read system temporary directory")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(prefix))
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
     }
 }

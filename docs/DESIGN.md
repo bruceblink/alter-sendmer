@@ -46,7 +46,8 @@ GPUI Window
 
 - 发送端保存完整 `SendResult`，直到用户停止共享或应用退出，确保 router、store、temp tag
   和进度任务持续存在。
-- 接收端保存 `AbortHandle`，取消按钮只负责 abort；任务收尾后统一清除状态。
+- 接收端保存 watch cancellation sender，取消按钮发出优雅取消信号；sendmer 负责关闭 endpoint、
+  store 和临时目录，任务收尾后 GPUI 再统一清除状态。
 - 应用退出先停止发送 router，再等待接收任务结束。
 
 ## 3. GPUI 映射

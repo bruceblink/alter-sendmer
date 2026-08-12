@@ -195,6 +195,7 @@ dependencies = [
  "directories",
  "gpui",
  "gpui_platform",
+ "iroh",
  "iroh-blobs",
  "reqwest",
  "rustls",
