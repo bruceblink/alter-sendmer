@@ -11,16 +11,19 @@ actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 
 /// Starts the native window and installs the same quit bindings used by flash-shot.
 pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
-    // Install a process-wide logger once so sendmer cleanup and connection diagnostics
+    // Install one process-wide tracing subscriber so sendmer cleanup and connection diagnostics
     // remain visible without writing tickets or file contents to persistent logs.
-    let _ = env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("alter_sendme_gpui=info,sendmer=info"),
-    )
-    .format_timestamp_millis()
-    .try_init();
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .map_err(|_| "rustls crypto provider was already installed")?;
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::new("alter_sendme_gpui=info,sendmer=info")
+    });
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(true)
+        .try_init();
+    // A host embedding GPUI may have already selected a rustls provider. That is compatible
+    // with reqwest's rustls-no-provider feature, so provider installation is intentionally
+    // best-effort instead of turning a second startup into a fatal error.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     // Keep a Tokio runtime entered for the GPUI event loop because transfer actions
     // create Tokio tasks while sendmer performs network and filesystem work.
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -81,7 +84,7 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
             .detach();
             app
         }) {
-            log::error!("failed to open AlterSendme window: {error}");
+            tracing::error!(error = %error, "failed to open AlterSendme window");
             cx.quit();
         }
     });
