@@ -960,19 +960,18 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
-    /// Aborts receive work and asynchronously releases sender resources when the window closes.
-    pub(crate) fn stop_on_exit(&mut self) {
+    /// Takes ownership of active transfer resources for the app-quit hook.
+    ///
+    /// The receive task is aborted immediately, while the sender result is returned so the
+    /// caller can await its ordered router/store cleanup before the process exits.
+    pub(crate) fn take_shutdown_resources(&mut self) -> Option<SendResult> {
         if let Some(abort) = self.send_abort.take() {
             abort.abort();
         }
         if let Some(abort) = self.receive_abort.take() {
             abort.abort();
         }
-        if let Some(result) = self.send_result.take() {
-            tokio::spawn(async move {
-                let _ = result.shutdown().await;
-            });
-        }
+        self.send_result.take()
     }
 
     fn new_transfer(&mut self, cx: &mut Context<Self>) {

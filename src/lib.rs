@@ -5,7 +5,7 @@ mod locale;
 mod transfer;
 
 use gpui::*;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 
@@ -34,6 +34,12 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
             KeyBinding::new("tab", Tab, None),
             KeyBinding::new("shift-tab", TabPrev, None),
         ]);
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
 
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1024.0), px(640.0)), cx)),
@@ -48,10 +54,17 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         };
         if let Err(error) = cx.open_window(options, move |window, cx| {
             let app = cx.new(|cx| app::AlterSendmeApp::new(started_at, window, cx));
-            let close_app = app.clone();
-            window.on_window_should_close(cx, move |_, cx| {
-                close_app.update(cx, |app, _| app.stop_on_exit());
-                true
+            app.update(cx, |_, cx| {
+                cx.on_app_quit(|app, _| {
+                    let send_result = app.take_shutdown_resources();
+                    async move {
+                        if let Some(result) = send_result {
+                            let _ = tokio::time::timeout(Duration::from_secs(2), result.shutdown())
+                                .await;
+                        }
+                    }
+                })
+                .detach();
             });
             app
         }) {
