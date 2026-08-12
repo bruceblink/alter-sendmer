@@ -349,6 +349,14 @@ impl AlterSendmeApp {
         if path.exists() {
             self.selected_is_dir = path.is_dir();
             self.selected_path = Some(path);
+            self.send_progress = Progress {
+                total_files: self
+                    .selected_path
+                    .as_ref()
+                    .map(path_file_count)
+                    .unwrap_or_default(),
+                ..Progress::default()
+            };
             self.error = None;
             self.status = self.status_text(
                 if self.selected_is_dir {
@@ -1089,6 +1097,12 @@ impl AlterSendmeApp {
                 speed,
             } => {
                 self.send_phase = TransferPhase::Transporting;
+                let total_files = self.send_progress.total_files.max(
+                    self.selected_path
+                        .as_ref()
+                        .map(path_file_count)
+                        .unwrap_or(1),
+                );
                 self.send_progress = Progress {
                     processed,
                     total,
@@ -1098,11 +1112,11 @@ impl AlterSendmeApp {
                             .map(|name| name.to_string_lossy().to_string())
                     }),
                     completed_files: if processed >= total && total > 0 {
-                        1
+                        total_files
                     } else {
                         0
                     },
-                    total_files: 1,
+                    total_files,
                 };
                 self.status = self.status_text("sharing", "Sharing in progress");
             }
@@ -1141,6 +1155,7 @@ impl AlterSendmeApp {
             TransferEvent::Completed { role: Role::Sender } => {
                 self.completed_stopped = false;
                 self.send_phase = TransferPhase::Completed;
+                self.send_progress.completed_files = self.send_progress.total_files;
                 self.completed_name = self
                     .selected_path
                     .as_ref()
@@ -2412,7 +2427,7 @@ fn history_panel(
 ) -> gpui::Div {
     let rows = app.history.iter().enumerate().fold(
         div().flex().flex_col().gap_2(),
-        |panel, (_index, entry)| {
+        |panel, (index, entry)| {
             let ticket = entry.ticket.clone();
             let path = entry.path.clone();
             let summary = format!(
@@ -2435,7 +2450,7 @@ fn history_panel(
                     )
                     .when_some(ticket, |view, ticket| {
                         view.child(app.button(
-                            ("history-copy", entry.size as usize),
+                            ("history-copy", index),
                             app.copy("copy"),
                             true,
                             colors,
@@ -2517,6 +2532,23 @@ fn path_size(path: &PathBuf) -> u64 {
             .filter_map(|entry| entry.metadata().ok())
             .map(|meta| meta.len())
             .sum();
+    }
+    0
+}
+
+/// Counts regular files represented by a send path for the folder progress label.
+fn path_file_count(path: &PathBuf) -> u32 {
+    if path.is_file() {
+        return 1;
+    }
+    if path.is_dir() {
+        return walkdir::WalkDir::new(path)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_file())
+            .count()
+            .try_into()
+            .unwrap_or(u32::MAX);
     }
     0
 }
@@ -2657,7 +2689,7 @@ fn ticket_is_valid(ticket: &str) -> bool {
 
 #[cfg(test)]
 mod history_tests {
-    use super::{HistoryEntry, Progress, TransferPhase, ticket_is_valid};
+    use super::{HistoryEntry, Progress, TransferPhase, path_file_count, ticket_is_valid};
 
     #[test]
     fn phase_model_exposes_idle_active_completion_and_failure() {
@@ -2680,6 +2712,17 @@ mod history_tests {
         };
         assert_eq!(progress.files_label("files"), "4294967295/4294967295 files");
         assert_eq!(progress.percentage(), 100.0);
+    }
+
+    #[test]
+    fn path_file_count_distinguishes_files_and_nested_folders() {
+        let root = tempfile::tempdir().expect("create folder fixture");
+        std::fs::create_dir(root.path().join("nested")).expect("create nested folder");
+        std::fs::write(root.path().join("a.txt"), b"a").expect("write first fixture");
+        std::fs::write(root.path().join("nested").join("b.txt"), b"b")
+            .expect("write second fixture");
+        assert_eq!(path_file_count(&root.path().to_path_buf()), 2);
+        assert_eq!(path_file_count(&root.path().join("a.txt")), 1);
     }
 
     #[test]
@@ -2759,6 +2802,43 @@ mod tests {
             }),
             1.0
         );
+    }
+
+    #[test]
+    fn all_core_ui_copy_aliases_resolve() {
+        let expected = [
+            "drop",
+            "start",
+            "stop",
+            "save",
+            "receive_action",
+            "copy",
+            "new",
+            "path_selected_file",
+            "path_selected_folder",
+            "preparing",
+            "listening",
+            "sharing",
+            "stopping",
+            "ticket_copied",
+            "connecting",
+            "downloading",
+            "download_completed",
+            "receive_failed",
+            "transfer_completed",
+            "transfer_failed",
+            "finalizing",
+            "open_folder",
+            "transfer_complete",
+            "failed",
+            "try_again",
+        ];
+        for key in expected {
+            assert!(
+                Locale::English.ui_copy(key).is_some(),
+                "missing UI copy alias: {key}"
+            );
+        }
     }
 
     #[test]
