@@ -135,7 +135,7 @@ impl Locale {
             "transfer_completed" => "sender.transferCompleted",
             "transfer_failed" => "errors.sharingFailed",
             "finalizing" => "transfer.complete",
-            "open_folder" => "receiver.saveToFolder",
+            "open_folder" => "receiver.openFolder",
             "transfer_complete" => "transfer.complete",
             other => other,
         };
@@ -167,6 +167,11 @@ mod tests {
         assert_eq!(
             Locale::Japanese.ui_copy("drop"),
             Some("ファイルまたはフォルダをここにドロップ")
+        );
+        assert_eq!(Locale::English.ui_copy("open_folder"), Some("Open folder"));
+        assert_eq!(
+            Locale::SimplifiedChinese.ui_copy("open_folder"),
+            Some("打开文件夹")
         );
     }
 }

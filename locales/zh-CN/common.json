@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "直接加密传输 · sendmer 核心",
+  "appSubtitle": "直接加密传输 - sendmer 核心",
   "send": "发送",
   "receive": "接收",
   "ok": "确定",
+  "ready": "就绪",
   "loading": "加载中...",
   "browse": "浏览",
   "donate": "捐赠",
@@ -65,6 +66,7 @@
     "connectingToSender": "正在连接到发送者",
     "downloadingInProgress": "正在下载",
     "downloadCompleted": "下载完成",
+    "openFolder": "打开文件夹",
     "stopReceiving": "停止接收"
   },
   "transfer": {

@@ -1,9 +1,10 @@
 {
     "appTitle": "AlterSendme",
-    "appSubtitle": "सीधा एन्क्रिप्टेड ट्रांसफर · sendmer कोर",
+    "appSubtitle": "सीधा एन्क्रिप्टेड ट्रांसफर - sendmer कोर",
     "send": "भेजें",
     "receive": "प्राप्त करें",
     "ok": "ठीक है",
+    "ready": "तैयार",
     "loading": "लोड हो रहा है...",
     "browse": "ब्राउज़ करें",
     "donate": "दान करें",
@@ -50,7 +51,8 @@
       "keepAppOpen": "फ़ाइलें डाउनलोड होने तक ऐप खुला रखें",
       "connectingToSender": "प्रेषक से कनेक्ट किया जा रहा है",
       "downloadingInProgress": "डाउनलोड जारी है",
-      "downloadCompleted": "डाउनलोड पूरा हुआ",
+    "downloadCompleted": "डाउनलोड पूरा हुआ",
+    "openFolder": "फ़ोल्डर खोलें",
       "stopReceiving": "प्राप्त करना रोकें"
     },
     "transfer": {

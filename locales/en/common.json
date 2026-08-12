@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Direct encrypted transfer · sendmer core",
+  "appSubtitle": "Direct encrypted transfer - sendmer core",
   "send": "Send",
   "receive": "Receive",
   "ok": "OK",
+  "ready": "Ready",
   "loading": "Loading...",
   "browse": "Browse",
   "donate": "Donate",
@@ -65,6 +66,7 @@
     "connectingToSender": "Connecting to sender",
     "downloadingInProgress": "Downloading in progress",
     "downloadCompleted": "Download completed",
+    "openFolder": "Open folder",
     "stopReceiving": "Stop receiving"
   },
   "transfer": {

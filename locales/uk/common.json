@@ -1,9 +1,10 @@
 {
     "appTitle": "AlterSendme",
-    "appSubtitle": "Пряма зашифрована передача · ядро sendmer",
+    "appSubtitle": "Пряма зашифрована передача - ядро sendmer",
     "send": "Надіслати",
     "receive": "Отримати",
     "ok": "ОК",
+    "ready": "Готово",
     "loading": "Завантаження...",
     "browse": "Переглянути",
     "donate": "Підтримати",
@@ -50,7 +51,8 @@
       "keepAppOpen": "Не закривайте додаток, поки ви завантажуєте файл",
       "connectingToSender": "Підключення до відправника",
       "downloadingInProgress": "Завантаження в процесі",
-      "downloadCompleted": "Завантаження завершено",
+    "downloadCompleted": "Завантаження завершено",
+    "openFolder": "Відкрити папку",
       "stopReceiving": "Припинити завантаження"
     },
     "transfer": {

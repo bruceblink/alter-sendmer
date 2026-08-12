@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Transfert chiffré direct · cœur sendmer",
+  "appSubtitle": "Transfert chiffré direct - cœur sendmer",
   "send": "Envoyer",
   "receive": "Recevoir",
   "ok": "OK",
+  "ready": "Prêt",
   "loading": "Chargement...",
   "browse": "Parcourir",
   "donate": "Faire un don",
@@ -51,6 +52,7 @@
     "connectingToSender": "Connexion à l'expéditeur",
     "downloadingInProgress": "Téléchargement en cours",
     "downloadCompleted": "Téléchargement terminé",
+    "openFolder": "Ouvrir le dossier",
     "stopReceiving": "Arrêter la réception"
   },
   "transfer": {

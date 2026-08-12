@@ -11,6 +11,9 @@ actions!(alter_sendme_gpui, [Quit]);
 
 /// Starts the native window and installs the same quit bindings used by flash-shot.
 pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| "rustls crypto provider was already installed")?;
     gpui_platform::application().run(move |cx| {
         cx.set_menus(vec![Menu {
             name: "AlterSendme".into(),

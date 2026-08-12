@@ -151,7 +151,10 @@ impl AlterSendmeApp {
             send_progress: Progress::default(),
             receive_progress: Progress::default(),
             receive_files: Vec::new(),
-            status: "Ready".to_owned(),
+            status: Locale::English
+                .lookup("ready")
+                .unwrap_or("Ready")
+                .to_owned(),
             error: None,
             completed_name: None,
             completed_path: None,
@@ -233,6 +236,14 @@ impl AlterSendmeApp {
         }
     }
 
+    fn theme_label(&self) -> String {
+        match self.theme {
+            Theme::System => self.text("theme.system"),
+            Theme::Dark => self.text("theme.dark"),
+            Theme::Light => self.text("theme.light"),
+        }
+    }
+
     fn text(&self, key: &str) -> String {
         self.locale
             .lookup(key)
@@ -268,11 +279,12 @@ impl AlterSendmeApp {
     }
 
     fn choose_send_path(&mut self, cx: &mut Context<Self>) {
+        let prompt = self.text("sender.browseFile");
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
             directories: true,
             multiple: false,
-            prompt: Some("Choose file or folder".into()),
+            prompt: Some(prompt.into()),
         });
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
@@ -289,11 +301,12 @@ impl AlterSendmeApp {
     }
 
     fn choose_save_path(&mut self, cx: &mut Context<Self>) {
+        let prompt = self.text("receiver.saveToFolder");
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Choose download folder".into()),
+            prompt: Some(prompt.into()),
         });
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
@@ -316,8 +329,13 @@ impl AlterSendmeApp {
     /// Opens a completed download in the platform file manager.
     fn reveal_completed_path(&mut self, cx: &mut Context<Self>) {
         if let Some(path) = self.completed_path.as_ref() {
-            cx.reveal_path(path);
-            self.status = self.status_text("download_completed", "Opened downloaded item");
+            let reveal_target = if path.is_dir() {
+                path.clone()
+            } else {
+                path.parent().unwrap_or(path).to_path_buf()
+            };
+            cx.reveal_path(&reveal_target);
+            self.status = self.status_text("download_completed", "Opened folder");
             cx.notify();
         }
     }
@@ -444,7 +462,7 @@ impl AlterSendmeApp {
         let Some(result) = self.send_result.take() else {
             self.send_phase = TransferPhase::Idle;
             self.transfer_started_at = None;
-            self.status = self.status_text("ok", "Ready");
+            self.status = self.status_text("ready", "Ready");
             cx.notify();
             return;
         };
@@ -465,7 +483,7 @@ impl AlterSendmeApp {
                         app.send_phase = TransferPhase::Idle;
                         app.ticket = None;
                         app.transfer_started_at = None;
-                        app.status = app.status_text("ok", "Ready");
+                        app.status = app.status_text("ready", "Ready");
                         if let Err(error) = outcome {
                             app.error = Some(error);
                         }
@@ -498,7 +516,7 @@ impl AlterSendmeApp {
     fn start_receiving(&mut self, cx: &mut Context<Self>) {
         let ticket = self.ticket_input.trim().to_owned();
         if ticket.is_empty() {
-            self.error = Some(self.text("receiver.pasteTicket"));
+            self.error = Some(self.text("receiver.ticketPlaceholder"));
             cx.notify();
             return;
         }
@@ -576,7 +594,7 @@ impl AlterSendmeApp {
         }
         self.receive_phase = TransferPhase::Idle;
         self.transfer_started_at = None;
-        self.status = self.status_text("ok", "Ready");
+        self.status = self.status_text("ready", "Ready");
         cx.notify();
     }
 
@@ -607,7 +625,7 @@ impl AlterSendmeApp {
             TransferPhase::Connecting | TransferPhase::Transporting
         );
         if active {
-            self.error = Some(self.text("transfer.stopped"));
+            self.error = Some(self.text("transfer.wasStopped"));
             cx.notify();
             return;
         }
@@ -632,7 +650,7 @@ impl AlterSendmeApp {
         self.completed_duration = Duration::ZERO;
         self.transfer_started_at = None;
         self.error = None;
-        self.status = self.status_text("ok", "Ready");
+        self.status = self.status_text("ready", "Ready");
         cx.notify();
     }
 
@@ -815,7 +833,7 @@ impl AlterSendmeApp {
             .selected_path
             .as_ref()
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| self.status_text("receiver.noFolderSelected", "No file selected"));
+            .unwrap_or_default();
         let ready = self.send_phase == TransferPhase::Idle;
         let completed = self.send_phase == TransferPhase::Completed;
         let sharing = matches!(
@@ -823,6 +841,12 @@ impl AlterSendmeApp {
             TransferPhase::Sharing | TransferPhase::Transporting
         );
         let progress = self.send_progress;
+        let selected_label = self
+            .selected_path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| selected.clone());
         div()
             .flex()
             .flex_col()
@@ -839,6 +863,27 @@ impl AlterSendmeApp {
                     .text_color(colors.muted)
                     .child(self.text("sender.subtitle")),
             )
+            .when(self.selected_path.is_some(), |view| {
+                view.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(div().flex_1().text_sm().truncate().child(format!(
+                            "{} {}",
+                            self.text("sender.fileLabel"),
+                            selected_label
+                        )))
+                        .child(div().text_xs().text_color(colors.muted).child(
+                            if self.selected_is_dir {
+                                self.text("transfer.folder")
+                            } else {
+                                self.text("transfer.file")
+                            },
+                        )),
+                )
+            })
             .child(
                 div()
                     .id("send-drop-zone")
@@ -954,6 +999,11 @@ impl AlterSendmeApp {
         let completed = self.receive_phase == TransferPhase::Completed;
         let save = self.save_path.display().to_string();
         let progress = self.receive_progress;
+        let receive_name = self
+            .receive_files
+            .first()
+            .cloned()
+            .unwrap_or_else(|| self.text("transfer.file"));
         div()
             .flex()
             .flex_col()
@@ -1036,6 +1086,13 @@ impl AlterSendmeApp {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(self.status.clone()),
                 )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .truncate()
+                        .child(receive_name),
+                )
                 .child(progress_bar(progress, colors))
                 .child(self.button(
                     "receive-stop",
@@ -1117,14 +1174,14 @@ impl Render for AlterSendmeApp {
                                         div()
                                             .text_lg()
                                             .font_weight(FontWeight::SEMIBOLD)
-                                            .child("AlterSendme"),
+                                            .child(self.text("appTitle")),
                                     )
-                                    .child(div().text_xs().text_color(colors.muted).child(
-                                        format!(
-                                            "Native GPUI workspace · {} ms",
-                                            self.started_at.elapsed().as_millis()
-                                        ),
-                                    )),
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(colors.muted)
+                                            .child(self.text("appSubtitle")),
+                                    ),
                             ),
                     )
                     .child(
@@ -1136,7 +1193,7 @@ impl Render for AlterSendmeApp {
                                 div()
                                     .id("theme-toggle")
                                     .role(A11yRole::Button)
-                                    .aria_label("Theme")
+                                    .aria_label(self.copy("theme"))
                                     .px_3()
                                     .py_2()
                                     .rounded_md()
@@ -1154,18 +1211,14 @@ impl Render for AlterSendmeApp {
                                     .child(format!(
                                         "{}: {}",
                                         self.copy("theme"),
-                                        match self.theme {
-                                            Theme::System => self.text("theme.system"),
-                                            Theme::Dark => self.text("theme.dark"),
-                                            Theme::Light => self.text("theme.light"),
-                                        }
+                                        self.theme_label()
                                     )),
                             )
                             .child(
                                 div()
                                     .id("locale-toggle")
                                     .role(A11yRole::Button)
-                                    .aria_label("Language")
+                                    .aria_label(self.copy("language"))
                                     .px_3()
                                     .py_2()
                                     .rounded_md()
@@ -1302,7 +1355,7 @@ impl Render for AlterSendmeApp {
                                         div()
                                             .id("footer-sponsor")
                                             .role(A11yRole::Button)
-                                            .aria_label("Donate")
+                                            .aria_label(self.text("donate"))
                                             .cursor_pointer()
                                             .on_click(cx.listener(|app, _, _, cx| {
                                                 app.open_sponsor_page(cx)
@@ -1313,7 +1366,7 @@ impl Render for AlterSendmeApp {
                                         div()
                                             .id("footer-update")
                                             .role(A11yRole::Button)
-                                            .aria_label("Check for updates")
+                                            .aria_label(self.text("update.checkNow"))
                                             .cursor_pointer()
                                             .on_click(cx.listener(|app, _, _, cx| {
                                                 app.open_update_or_check(cx)
@@ -1616,7 +1669,7 @@ fn completion_card(
             ),
         )
         .child(div().text_sm().text_color(colors.muted).child(format!(
-            "{} bytes · {:.1}s",
+            "{} bytes - {:.1}s",
             app.completed_size,
             app.completed_duration.as_secs_f32()
         )))
@@ -1649,7 +1702,7 @@ fn ticket_input(
     div()
         .id("ticket-input")
         .role(A11yRole::TextInput)
-        .aria_label("Receive ticket")
+        .aria_label(app.text("receiver.pasteTicket"))
         .relative()
         .h(px(78.0))
         .w_full()
@@ -1675,7 +1728,7 @@ fn ticket_input(
                     colors.text
                 })
                 .child(if app.ticket_input.is_empty() {
-                    "sendme receive ticket...".to_owned()
+                    app.text("receiver.ticketPlaceholder")
                 } else {
                     app.ticket_input.clone()
                 }),

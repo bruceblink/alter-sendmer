@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "직접 암호화 전송 · sendmer 코어",
+  "appSubtitle": "직접 암호화 전송 - sendmer 코어",
   "send": "보내기",
   "receive": "받기",
   "ok": "확인",
+  "ready": "준비됨",
   "loading": "로딩 중...",
   "browse": "찾아보기",
   "donate": "기부하기",
@@ -51,6 +52,7 @@
     "connectingToSender": "보낸 사람에게 연결 중",
     "downloadingInProgress": "다운로드 진행 중",
     "downloadCompleted": "다운로드 완료",
+    "openFolder": "폴더 열기",
     "stopReceiving": "받기 중지"
   },
   "transfer": {

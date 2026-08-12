@@ -1,9 +1,10 @@
 {
     "appTitle": "AlterSendme",
-    "appSubtitle": "Bezpośredni szyfrowany transfer · rdzeń sendmer",
+    "appSubtitle": "Bezpośredni szyfrowany transfer - rdzeń sendmer",
     "send": "Wyślij",
     "receive": "Odbierz",
     "ok": "OK",
+    "ready": "Gotowe",
     "loading": "Ładowanie...",
     "browse": "Przeglądaj",
     "donate": "Wesprzyj",
@@ -50,7 +51,8 @@
       "keepAppOpen": "Pozostaw aplikację otwartą, dopóki pliki są pobierane",
       "connectingToSender": "Łączenie z nadawcą",
       "downloadingInProgress": "Pobieranie w toku",
-      "downloadCompleted": "Pobieranie zakończone",
+    "downloadCompleted": "Pobieranie zakończone",
+    "openFolder": "Otwórz folder",
       "stopReceiving": "Zatrzymaj odbieranie"
     },
     "transfer": {

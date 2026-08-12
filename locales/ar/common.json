@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "نقل مشفر مباشر · نواة sendmer",
+  "appSubtitle": "نقل مشفر مباشر - نواة sendmer",
   "send": "إرسال",
   "receive": "استقبال",
   "ok": "موافق",
+  "ready": "جاهز",
   "loading": "جاري التحميل...",
   "browse": "تصفح",
   "donate": "تبرع",
@@ -51,6 +52,7 @@
     "connectingToSender": "الاتصال بالمرسل",
     "downloadingInProgress": "التنزيل قيد التنفيذ",
     "downloadCompleted": "اكتمل التنزيل",
+    "openFolder": "فتح المجلد",
     "stopReceiving": "إيقاف الاستقبال"
   },
   "transfer": {

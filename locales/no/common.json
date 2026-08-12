@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Direkte krypterte overføringer · sendmer-kjerne",
+  "appSubtitle": "Direkte krypterte overføringer - sendmer-kjerne",
   "send": "Send",
   "receive": "Motta",
   "ok": "OK",
+  "ready": "Klar",
   "loading": "Laster...",
   "browse": "Bla gjennom",
   "donate": "Doner",
@@ -51,6 +52,7 @@
     "connectingToSender": "Kobler til avsender",
     "downloadingInProgress": "Nedlasting pågår",
     "downloadCompleted": "Nedlasting fullført",
+    "openFolder": "Åpne mappe",
     "stopReceiving": "Stopp overføring"
   },
   "transfer": {

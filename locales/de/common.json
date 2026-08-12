@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Direkte verschlüsselte Übertragung · sendmer-Kern",
+  "appSubtitle": "Direkte verschlüsselte Übertragung - sendmer-Kern",
   "send": "Senden",
   "receive": "Empfangen",
   "ok": "OK",
+  "ready": "Bereit",
   "loading": "Wird geladen...",
   "browse": "Durchsuchen",
   "donate": "Spenden",
@@ -51,6 +52,7 @@
     "connectingToSender": "Verbindung zum Absender wird hergestellt",
     "downloadingInProgress": "Download läuft",
     "downloadCompleted": "Download abgeschlossen",
+    "openFolder": "Ordner öffnen",
     "stopReceiving": "Empfang beenden"
   },
   "transfer": {

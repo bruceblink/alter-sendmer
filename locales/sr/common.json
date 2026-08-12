@@ -1,9 +1,10 @@
 {
   "appTitle": "АлтПошаљиМи",
-  "appSubtitle": "Директан шифрован пренос · sendmer језгро",
+  "appSubtitle": "Директан шифрован пренос - sendmer језгро",
   "send": "Пошаљи",
   "receive": "Прими",
   "ok": "У реду",
+  "ready": "Спремно",
   "loading": "Учитавам...",
   "browse": "Разгледај",
   "donate": "Донирај",
@@ -51,6 +52,7 @@
     "connectingToSender": "Повезујем се са пошиљаоцем",
     "downloadingInProgress": "Преузимање у току",
     "downloadCompleted": "Преузимање завршено",
+    "openFolder": "Отвори фасциклу",
     "stopReceiving": "Прекини примање"
   },
   "transfer": {

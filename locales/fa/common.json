@@ -1,9 +1,10 @@
 {
     "appTitle": "AlterSendme",
-    "appSubtitle": "انتقال مستقیم رمزگذاری‌شده · هسته sendmer",
+    "appSubtitle": "انتقال مستقیم رمزگذاری‌شده - هسته sendmer",
     "send": "ارسال",
     "receive": "دریافت",
     "ok": "باشه",
+    "ready": "آماده",
     "loading": "در حال بارگذاری...",
     "browse": "انتخاب",
     "donate": "حمایت",
@@ -50,7 +51,8 @@
       "keepAppOpen": "تا پایان دریافت برنامه رو باز نگه دار",
       "connectingToSender": "در حال اتصال...",
       "downloadingInProgress": "در حال دانلود...",
-      "downloadCompleted": "دانلود کامل شد",
+    "downloadCompleted": "دانلود کامل شد",
+    "openFolder": "باز کردن پوشه",
       "stopReceiving": "توقف دریافت"
     },
     "transfer": {

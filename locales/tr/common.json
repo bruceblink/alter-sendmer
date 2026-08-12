@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Doğrudan şifreli aktarım · sendmer çekirdeği",
+  "appSubtitle": "Doğrudan şifreli aktarım - sendmer çekirdeği",
   "send": "Gönder",
   "receive": "Al",
   "ok": "TAMAM",
+  "ready": "Hazır",
   "loading": "Yükleniyor...",
   "browse": "Gözat",
   "donate": "Bağış Yap",
@@ -51,6 +52,7 @@
     "connectingToSender": "Göndericiye bağlanılıyor",
     "downloadingInProgress": "İndirme işlemi sürüyor",
     "downloadCompleted": "İndirme tamamlandı",
+    "openFolder": "Klasörü aç",
     "stopReceiving": "Alımı durdur"
   },
   "transfer": {

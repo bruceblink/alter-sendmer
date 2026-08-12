@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Přímý šifrovaný přenos · jádro sendmer",
+  "appSubtitle": "Přímý šifrovaný přenos - jádro sendmer",
   "send": "Odeslat",
   "receive": "Přijmout",
   "ok": "OK",
+  "ready": "Připraveno",
   "loading": "Načítání...",
   "browse": "Procházet",
   "donate": "Přispět",
@@ -51,6 +52,7 @@
     "connectingToSender": "Připojování k odesílateli",
     "downloadingInProgress": "Probíhá stahování",
     "downloadCompleted": "Stahování dokončeno",
+    "openFolder": "Otevřít složku",
     "stopReceiving": "Zastavit příjem"
   },
   "transfer": {

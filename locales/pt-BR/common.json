@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "Transferência criptografada direta · núcleo sendmer",
+  "appSubtitle": "Transferência criptografada direta - núcleo sendmer",
   "send": "Enviar",
   "receive": "Receber",
   "ok": "OK",
+  "ready": "Pronto",
   "loading": "Carregando...",
   "browse": "Navegar",
   "donate": "Doar",
@@ -51,6 +52,7 @@
     "connectingToSender": "Conectando ao remetente",
     "downloadingInProgress": "Download em andamento",
     "downloadCompleted": "Download concluído",
+    "openFolder": "Abrir pasta",
     "stopReceiving": "Parar recebimento"
   },
   "transfer": {

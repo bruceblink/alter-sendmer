@@ -1,9 +1,10 @@
 {
   "appTitle": "AlterSendme",
-  "appSubtitle": "โอนย้ายแบบเข้ารหัสโดยตรง · แกน sendmer",
+  "appSubtitle": "โอนย้ายแบบเข้ารหัสโดยตรง - แกน sendmer",
   "send": "ส่ง",
   "receive": "รับ",
   "ok": "ตกลง",
+  "ready": "พร้อม",
   "loading": "กำลังโหลด...",
   "browse": "เลือก",
   "donate": "บริจาค",
@@ -51,6 +52,7 @@
     "connectingToSender": "กำลังเชื่อมต่อกับผู้ส่ง",
     "downloadingInProgress": "กำลังดาวน์โหลด",
     "downloadCompleted": "ดาวน์โหลดเสร็จสมบูรณ์",
+    "openFolder": "เปิดโฟลเดอร์",
     "stopReceiving": "หยุดรับ"
   },
   "transfer": {
