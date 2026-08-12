@@ -1202,8 +1202,7 @@ impl AlterSendmeApp {
             })
             .cursor_pointer()
             .on_click(cx.listener(move |app, _, _, cx| {
-                if app.send_phase == TransferPhase::Idle && app.receive_phase == TransferPhase::Idle
-                {
+                if !tabs_locked(app.send_phase, app.receive_phase) {
                     app.tab = tab;
                     cx.notify();
                 }
@@ -2238,6 +2237,13 @@ mod update_tests {
     }
 }
 
+/// Returns whether an active transfer must keep the user on the current tab.
+/// Completed and failed states remain navigable so a user can switch workflows
+/// without first creating a new transfer.
+fn tabs_locked(send_phase: TransferPhase, receive_phase: TransferPhase) -> bool {
+    send_phase.is_active() || receive_phase.is_active()
+}
+
 fn ticket_card(
     ticket: &str,
     colors: Palette,
@@ -2684,5 +2690,19 @@ mod tests {
         let text = "a😀b";
         assert_eq!(utf16_to_byte_range(text, 1..3), 1..5);
         assert_eq!(byte_to_utf16_range(text, 1..5), 1..3);
+    }
+
+    #[test]
+    fn tabs_lock_only_while_a_transfer_is_active() {
+        assert!(tabs_locked(TransferPhase::Preparing, TransferPhase::Idle));
+        assert!(tabs_locked(
+            TransferPhase::Idle,
+            TransferPhase::Transporting
+        ));
+        assert!(!tabs_locked(TransferPhase::Completed, TransferPhase::Idle));
+        assert!(!tabs_locked(
+            TransferPhase::Failed,
+            TransferPhase::Completed
+        ));
     }
 }
