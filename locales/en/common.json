@@ -8,6 +8,11 @@
   "loading": "Loading...",
   "browse": "Browse",
   "donate": "Donate",
+  "diagnostics": {
+    "action": "Diagnostics",
+    "client": "Client",
+    "completed": "Diagnostics ready"
+  },
   "update": {
     "checkNow": "Check Update",
     "checking": "Checking...",
@@ -48,6 +53,10 @@
     "browseFile": "Browse File",
     "browseFolder": "Browse Folder",
     "copyToClipboard": "Copy to clipboard"
+    ,"saveTicket": "Save ticket"
+    ,"openSharedFolder": "Open shared folder"
+    ,"ticketSaved": "Ticket saved"
+    ,"folderOpened": "Shared folder opened"
   },
   "receiver": {
     "title": "Receive Files",
@@ -67,7 +76,8 @@
     "downloadingInProgress": "Downloading in progress",
     "downloadCompleted": "Download completed",
     "openFolder": "Open folder",
-    "stopReceiving": "Stop receiving"
+    "stopReceiving": "Stop receiving",
+    "invalidTicket": "The ticket is invalid or expired"
   },
   "transfer": {
     "progress": "Transfer Progress",
@@ -87,7 +97,19 @@
     "folderSize": "Folder size",
     "downloadPath": "Download path",
     "duration": "Duration",
-    "avgSpeed": "Avg Speed"
+    "avgSpeed": "Avg Speed",
+    "files": "files"
+    ,"failed": "Transfer failed"
+    ,"tryAgain": "Try again"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No transfers yet",
+    "clear": "Clear history",
+    "cleared": "Transfer history cleared"
+  },
+  "preferences": {
+    "relay": "Relay mode"
   },
   "errors": {
     "sharingFailed": "Sharing Failed",

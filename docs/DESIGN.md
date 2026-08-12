@@ -32,8 +32,9 @@ GPUI Window
 旧传输覆盖新传输。
 
 发送状态：`Idle -> Preparing -> Sharing -> Transporting -> Completed`，停止时进入
-`Stopping -> Idle`。接收状态：`Idle -> Connecting -> Transporting -> Completed`，取消或失败
-回到 `Idle` 并保留可读错误。
+`Stopping -> Idle`；启动或传输失败进入 `Failed`，可通过 `Try again` 重置。接收状态：
+`Idle -> Connecting -> Transporting -> Completed`，取消回到 `Idle`，失败进入 `Failed` 并保留
+可读错误。Completed 提供 Done/New transfer、Open folder，Failed 提供 Retry。
 
 ### 2.2 事件桥
 
@@ -64,6 +65,10 @@ GPUI Window
 
 票据输入使用 GPUI 原生 `ElementInputHandler`，因此支持中文输入法、选择、粘贴和键盘事件；不
 通过伪造的按钮或不可编辑标签替代真实文本框。
+
+传输历史保存在系统应用数据目录的 `history.json`，只写入角色、路径、大小、耗时、平均速度、
+时间、结果和发送端票据；不会写入文件内容。主题选择保存在同一应用配置目录，relay 模式和接收
+重试/块大小在工作台偏好控件中切换并传给 sendmer。
 
 ## 4. 视觉与交互
 

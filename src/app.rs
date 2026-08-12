@@ -10,8 +10,9 @@ use gpui::{
     Window, WindowAppearance, div, px, rgb,
 };
 use sendmer::{Role, SendResult, TransferEvent};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
+    fs,
     ops::Range,
     path::PathBuf,
     time::{Duration, Instant},
@@ -46,23 +47,67 @@ enum TransferPhase {
     Transporting,
     Stopping,
     Completed,
+    Failed,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+impl TransferPhase {
+    fn is_active(self) -> bool {
+        matches!(
+            self,
+            Self::Preparing
+                | Self::Sharing
+                | Self::Connecting
+                | Self::Transporting
+                | Self::Stopping
+        )
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 struct Progress {
     processed: u64,
     total: u64,
     speed: f64,
+    current_name: Option<String>,
+    completed_files: u32,
+    total_files: u32,
 }
 
 impl Progress {
-    fn percentage(self) -> f32 {
+    fn percentage(&self) -> f32 {
         if self.total == 0 {
             0.0
         } else {
             ((self.processed as f32 / self.total as f32) * 100.0).clamp(0.0, 100.0)
         }
     }
+
+    fn files_label(&self, unit: &str) -> String {
+        if self.total_files == 0 {
+            return String::new();
+        }
+        format!("{}/{} {unit}", self.completed_files, self.total_files)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct HistoryEntry {
+    role: String,
+    path: String,
+    size: u64,
+    duration_ms: u128,
+    speed: u64,
+    date: String,
+    outcome: String,
+    ticket: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
+struct Preferences {
+    relay: String,
+    retry_limit: u32,
+    download_limit_mb: u32,
 }
 
 /// Owns all user-facing state and serializes async transfer completions by generation.
@@ -98,6 +143,10 @@ pub struct AlterSendmeApp {
     update_checking: bool,
     update_info: Option<UpdateInfo>,
     update_status: Option<String>,
+    history: Vec<HistoryEntry>,
+    history_open: bool,
+    preferences: Preferences,
+    diagnostics: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -135,7 +184,7 @@ impl AlterSendmeApp {
         let app = Self {
             started_at,
             tab: Tab::Send,
-            theme: Theme::System,
+            theme: load_theme(),
             locale: Locale::English,
             send_phase: TransferPhase::Idle,
             receive_phase: TransferPhase::Idle,
@@ -167,6 +216,14 @@ impl AlterSendmeApp {
             update_checking: false,
             update_info: None,
             update_status: None,
+            history: load_history(),
+            history_open: false,
+            preferences: Preferences {
+                relay: "default".to_owned(),
+                retry_limit: 3,
+                download_limit_mb: 32,
+            },
+            diagnostics: None,
         };
         let entity = cx.entity().downgrade();
         cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -398,6 +455,123 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Shows a local diagnostic summary so support can identify the app, relay, and storage setup.
+    fn run_diagnostics(&mut self, cx: &mut Context<Self>) {
+        self.diagnostics = Some(format!(
+            "{} {} | relay={} | history={} | sendmer=0.6",
+            self.text("diagnostics.client"),
+            env!("CARGO_PKG_VERSION"),
+            self.preferences.relay,
+            self.history.len()
+        ));
+        self.status = self.text("diagnostics.completed");
+        cx.notify();
+    }
+
+    fn save_ticket(&mut self, cx: &mut Context<Self>) {
+        let Some(ticket) = self.ticket.clone() else {
+            return;
+        };
+        let path = self
+            .selected_path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| format!("{}.sendme.ticket", name.to_string_lossy()))
+            .unwrap_or_else(|| "alter-sendme.ticket".to_owned());
+        let destination = self
+            .selected_path
+            .as_ref()
+            .and_then(|source| source.parent())
+            .unwrap_or(&self.save_path)
+            .join(path);
+        match fs::write(&destination, ticket) {
+            Ok(()) => self.status = self.text("sender.ticketSaved"),
+            Err(error) => self.error = Some(error.to_string()),
+        }
+        cx.notify();
+    }
+
+    fn open_shared_folder(&mut self, cx: &mut Context<Self>) {
+        if let Some(path) = self.selected_path.clone() {
+            let target = if path.is_dir() {
+                path
+            } else {
+                path.parent().unwrap_or(&path).to_path_buf()
+            };
+            cx.reveal_path(&target);
+            self.status = self.text("sender.folderOpened");
+            cx.notify();
+        }
+    }
+
+    #[allow(dead_code)]
+    fn clear_history(&mut self, cx: &mut Context<Self>) {
+        self.history.clear();
+        persist_history(&self.history);
+        self.status = self.text("history.cleared");
+        cx.notify();
+    }
+
+    fn show_history(&mut self, cx: &mut Context<Self>) {
+        self.history_open = !self.history_open;
+        self.status = if self.history.is_empty() {
+            self.text("history.empty")
+        } else {
+            format!("{}: {}", self.text("history.title"), self.history.len())
+        };
+        cx.notify();
+    }
+
+    fn copy_history_ticket(&mut self, ticket: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(ticket.into());
+        self.status = self.text("ticket_copied");
+        cx.notify();
+    }
+
+    fn cycle_relay(&mut self, cx: &mut Context<Self>) {
+        self.preferences.relay = if self.preferences.relay == "default" {
+            "disabled".to_owned()
+        } else {
+            "default".to_owned()
+        };
+        self.status = format!(
+            "{}: {}",
+            self.text("preferences.relay"),
+            self.preferences.relay
+        );
+        cx.notify();
+    }
+
+    fn record_history(&mut self, role: &str, path: Option<&PathBuf>, outcome: &str) {
+        let duration = self
+            .transfer_started_at
+            .map(|started| started.elapsed())
+            .unwrap_or_default();
+        let size = path.map(path_size).unwrap_or(0);
+        let speed = if duration.is_zero() {
+            0
+        } else {
+            (size as f64 / duration.as_secs_f64()) as u64
+        };
+        self.history.push(HistoryEntry {
+            role: role.to_owned(),
+            path: path
+                .map(|value| value.display().to_string())
+                .unwrap_or_default(),
+            size,
+            duration_ms: duration.as_millis(),
+            speed,
+            date: unix_timestamp().to_string(),
+            outcome: outcome.to_owned(),
+            ticket: if role == "sender" {
+                self.ticket.clone()
+            } else {
+                None
+            },
+        });
+        persist_history(&self.history);
+    }
+
     fn start_sharing(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.selected_path.clone() else {
             self.error = Some(self.text("sender.dropFilesHere"));
@@ -414,7 +588,12 @@ impl AlterSendmeApp {
         self.status = self.status_text("preparing", "Preparing encrypted share...");
         self.error = None;
         let events = self.event_sender.clone();
-        let task = tokio::spawn(transfer::start_send(path, events, generation));
+        let relay_mode = if self.preferences.relay == "disabled" {
+            sendmer::RelayModeOption::Disabled
+        } else {
+            sendmer::RelayModeOption::Default
+        };
+        let task = tokio::spawn(transfer::start_send(path, events, generation, relay_mode));
         self.send_abort = Some(task.abort_handle());
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
@@ -445,7 +624,7 @@ impl AlterSendmeApp {
             }
             Err(error) => {
                 self.send_abort = None;
-                self.send_phase = TransferPhase::Idle;
+                self.send_phase = TransferPhase::Failed;
                 self.error = Some(error);
                 self.status = self.status_text("transfer_failed", "Sharing failed");
             }
@@ -503,6 +682,20 @@ impl AlterSendmeApp {
         }
     }
 
+    fn retry_send(&mut self, cx: &mut Context<Self>) {
+        self.send_phase = TransferPhase::Idle;
+        self.error = None;
+        self.send_progress = Progress::default();
+        self.start_sharing(cx);
+    }
+
+    fn retry_receive(&mut self, cx: &mut Context<Self>) {
+        self.receive_phase = TransferPhase::Idle;
+        self.error = None;
+        self.receive_progress = Progress::default();
+        self.start_receiving(cx);
+    }
+
     fn paste_ticket(&mut self, cx: &mut Context<Self>) {
         if let Some(item) = cx.read_from_clipboard()
             && let Some(text) = item.text()
@@ -520,6 +713,12 @@ impl AlterSendmeApp {
             cx.notify();
             return;
         }
+        if ticket.parse::<iroh_blobs::ticket::BlobTicket>().is_err() {
+            self.error = Some(self.text("receiver.invalidTicket"));
+            self.receive_phase = TransferPhase::Failed;
+            cx.notify();
+            return;
+        }
         if self.receive_phase != TransferPhase::Idle {
             return;
         }
@@ -534,6 +733,17 @@ impl AlterSendmeApp {
             self.save_path.clone(),
             self.event_sender.clone(),
             generation,
+            if self.preferences.relay == "disabled" {
+                sendmer::RelayModeOption::Disabled
+            } else {
+                sendmer::RelayModeOption::Default
+            },
+            sendmer::core::options::ReceiveRetryPolicy {
+                download_retry_limit: self.preferences.retry_limit,
+                size_fetch_retry_limit: self.preferences.retry_limit,
+                size_fetch_chunk_size: self.preferences.download_limit_mb as u64 * 1024 * 1024,
+                ..Default::default()
+            },
         ));
         self.receive_abort = Some(task.abort_handle());
         let app = cx.entity().downgrade();
@@ -574,11 +784,13 @@ impl AlterSendmeApp {
                     .transfer_started_at
                     .unwrap_or(self.started_at)
                     .elapsed();
+                let path = Some(result.file_path.clone());
+                self.record_history("receiver", path.as_ref(), "completed");
                 self.transfer_started_at = None;
                 self.status = self.status_text("download_completed", "Download completed");
             }
             Err(error) => {
-                self.receive_phase = TransferPhase::Idle;
+                self.receive_phase = TransferPhase::Failed;
                 self.transfer_started_at = None;
                 self.error = Some(error);
                 self.status = self.status_text("receive_failed", "Receive failed");
@@ -649,9 +861,18 @@ impl AlterSendmeApp {
         self.completed_size = 0;
         self.completed_duration = Duration::ZERO;
         self.transfer_started_at = None;
+        self.diagnostics = None;
         self.error = None;
         self.status = self.status_text("ready", "Ready");
         cx.notify();
+    }
+
+    fn done_transfer(&mut self, cx: &mut Context<Self>) {
+        if self.send_phase == TransferPhase::Completed
+            || self.receive_phase == TransferPhase::Completed
+        {
+            self.new_transfer(cx);
+        }
     }
 
     fn on_drop(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
@@ -685,6 +906,16 @@ impl AlterSendmeApp {
                     processed,
                     total,
                     speed,
+                    current_name: self.selected_path.as_ref().and_then(|path| {
+                        path.file_name()
+                            .map(|name| name.to_string_lossy().to_string())
+                    }),
+                    completed_files: if processed >= total && total > 0 {
+                        1
+                    } else {
+                        0
+                    },
+                    total_files: 1,
                 };
                 self.status = self.status_text("sharing", "Sharing in progress");
             }
@@ -699,13 +930,24 @@ impl AlterSendmeApp {
                     processed,
                     total,
                     speed,
+                    current_name: self.receive_files.first().cloned(),
+                    completed_files: if processed >= total && total > 0 {
+                        self.receive_files.len().max(1) as u32
+                    } else {
+                        0
+                    },
+                    total_files: self.receive_files.len().max(1) as u32,
                 };
                 self.status = self.status_text("downloading", "Downloading in progress");
             }
             TransferEvent::FileNames {
                 role: Role::Receiver,
                 file_names,
-            } => self.receive_files = file_names,
+            } => {
+                self.receive_progress.total_files = file_names.len().max(1) as u32;
+                self.receive_files = file_names;
+                self.receive_progress.current_name = self.receive_files.first().cloned();
+            }
             TransferEvent::FileNames {
                 role: Role::Sender, ..
             } => {}
@@ -724,17 +966,29 @@ impl AlterSendmeApp {
                     .elapsed();
                 self.transfer_started_at = None;
                 self.status = self.status_text("transfer_completed", "Transfer completed");
+                let path = self.selected_path.clone();
+                self.record_history("sender", path.as_ref(), "completed");
             }
             TransferEvent::Completed {
                 role: Role::Receiver,
             } => {
-                self.receive_phase = TransferPhase::Transporting;
+                self.receive_phase = TransferPhase::Completed;
                 self.status = self.status_text("finalizing", "Finalizing download");
             }
-            TransferEvent::Failed { message, .. } => {
+            TransferEvent::Failed { role, message } => {
                 self.error = Some(message);
-                self.send_phase = TransferPhase::Idle;
-                self.receive_phase = TransferPhase::Idle;
+                match role {
+                    Role::Sender => {
+                        self.send_phase = TransferPhase::Failed;
+                        let path = self.selected_path.clone();
+                        self.record_history("sender", path.as_ref(), "failed");
+                    }
+                    Role::Receiver => {
+                        self.receive_phase = TransferPhase::Failed;
+                        let path = self.completed_path.clone();
+                        self.record_history("receiver", path.as_ref(), "failed");
+                    }
+                }
                 self.transfer_started_at = None;
                 self.status = self.status_text("transfer_failed", "Transfer failed");
             }
@@ -785,14 +1039,16 @@ impl AlterSendmeApp {
 
     fn button(
         &self,
-        id: &'static str,
+        id: impl Into<gpui::ElementId>,
         label: impl Into<String>,
         enabled: bool,
         colors: Palette,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
     ) -> gpui::Stateful<gpui::Div> {
+        let id = id.into();
         let label = label.into();
+        let destructive = id.to_string().contains("stop");
         div()
             .id(id)
             .role(A11yRole::Button)
@@ -805,12 +1061,20 @@ impl AlterSendmeApp {
             .rounded_md()
             .border_1()
             .border_color(if enabled {
-                colors.accent
+                if destructive {
+                    colors.danger
+                } else {
+                    colors.accent
+                }
             } else {
                 colors.border
             })
             .bg(if enabled {
-                colors.accent
+                if destructive {
+                    colors.danger
+                } else {
+                    colors.accent
+                }
             } else {
                 colors.panel_alt
             })
@@ -836,11 +1100,16 @@ impl AlterSendmeApp {
             .unwrap_or_default();
         let ready = self.send_phase == TransferPhase::Idle;
         let completed = self.send_phase == TransferPhase::Completed;
+        let failed = self.send_phase == TransferPhase::Failed;
+        let preparing = matches!(
+            self.send_phase,
+            TransferPhase::Preparing | TransferPhase::Stopping
+        );
         let sharing = matches!(
             self.send_phase,
             TransferPhase::Sharing | TransferPhase::Transporting
         );
-        let progress = self.send_progress;
+        let progress = self.send_progress.clone();
         let selected_label = self
             .selected_path
             .as_ref()
@@ -927,7 +1196,7 @@ impl AlterSendmeApp {
                             .child(selected),
                     ),
             )
-            .when(!sharing && !completed, |view| {
+            .when(!sharing && !completed && !failed && !preparing, |view| {
                 view.child(self.button(
                     "send-start",
                     self.copy("start"),
@@ -936,6 +1205,14 @@ impl AlterSendmeApp {
                     cx,
                     |app, cx| app.start_sharing(cx),
                 ))
+            })
+            .when(preparing, |view| {
+                view.child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(self.status.clone()),
+                )
             })
             .when(sharing, |view| {
                 view.child(
@@ -954,7 +1231,21 @@ impl AlterSendmeApp {
                                 self.status.clone()
                             },
                         ))
-                        .child(progress_bar(progress, colors))
+                        .child(progress_bar(&progress, colors))
+                        .child(
+                            div().text_xs().text_color(colors.muted).child(
+                                progress
+                                    .current_name
+                                    .clone()
+                                    .unwrap_or_else(|| self.text("transfer.file")),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted)
+                                .child(progress.files_label(&self.text("transfer.files"))),
+                        )
                         .child(
                             div()
                                 .flex()
@@ -974,9 +1265,41 @@ impl AlterSendmeApp {
                                     colors,
                                     cx,
                                     |app, cx| app.stop_sharing(cx),
+                                ))
+                                .child(self.button(
+                                    "send-save-ticket",
+                                    self.text("sender.saveTicket"),
+                                    self.ticket.is_some(),
+                                    colors,
+                                    cx,
+                                    |app, cx| app.save_ticket(cx),
+                                ))
+                                .child(self.button(
+                                    "send-open-folder",
+                                    self.text("sender.openSharedFolder"),
+                                    self.selected_path.is_some(),
+                                    colors,
+                                    cx,
+                                    |app, cx| app.open_shared_folder(cx),
                                 )),
                         ),
                 )
+            })
+            .when(failed, |view| {
+                view.child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.danger)
+                        .child(self.text("transfer.failed")),
+                )
+                .child(self.button(
+                    "send-retry",
+                    self.text("transfer.tryAgain"),
+                    true,
+                    colors,
+                    cx,
+                    |app, cx| app.retry_send(cx),
+                ))
             })
             .when(completed, |view| {
                 view.child(completion_card(self, colors, cx))
@@ -995,10 +1318,11 @@ impl AlterSendmeApp {
     }
 
     fn render_receive(&mut self, colors: Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let receiving = self.receive_phase != TransferPhase::Idle;
+        let receiving = self.receive_phase.is_active();
         let completed = self.receive_phase == TransferPhase::Completed;
+        let failed = self.receive_phase == TransferPhase::Failed;
         let save = self.save_path.display().to_string();
-        let progress = self.receive_progress;
+        let progress = self.receive_progress.clone();
         let receive_name = self
             .receive_files
             .first()
@@ -1091,9 +1415,23 @@ impl AlterSendmeApp {
                         .text_xs()
                         .text_color(colors.muted)
                         .truncate()
-                        .child(receive_name),
+                        .child(receive_name.clone()),
                 )
-                .child(progress_bar(progress, colors))
+                .child(progress_bar(&progress, colors))
+                .child(
+                    div().text_xs().text_color(colors.muted).child(
+                        progress
+                            .current_name
+                            .clone()
+                            .unwrap_or_else(|| receive_name.clone()),
+                    ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .child(progress.files_label(&self.text("transfer.files"))),
+                )
                 .child(self.button(
                     "receive-stop",
                     self.text("receiver.stopReceiving"),
@@ -1101,6 +1439,22 @@ impl AlterSendmeApp {
                     colors,
                     cx,
                     |app, cx| app.stop_receiving(cx),
+                ))
+            })
+            .when(failed, |view| {
+                view.child(
+                    div()
+                        .text_sm()
+                        .text_color(colors.danger)
+                        .child(self.text("transfer.failed")),
+                )
+                .child(self.button(
+                    "receive-retry",
+                    self.text("transfer.tryAgain"),
+                    true,
+                    colors,
+                    cx,
+                    |app, cx| app.retry_receive(cx),
                 ))
             })
             .when(completed, |view| {
@@ -1206,6 +1560,7 @@ impl Render for AlterSendmeApp {
                                             Theme::Dark => Theme::Light,
                                             Theme::Light => Theme::System,
                                         };
+                                        persist_theme(app.theme);
                                         cx.notify();
                                     }))
                                     .child(format!(
@@ -1239,7 +1594,31 @@ impl Render for AlterSendmeApp {
                                         self.copy("language"),
                                         self.locale.label()
                                     )),
-                            ),
+                            )
+                            .child(self.button(
+                                "diagnostics",
+                                self.text("diagnostics.action"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.run_diagnostics(cx),
+                            ))
+                            .child(self.button(
+                                "history",
+                                self.text("history.title"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.show_history(cx),
+                            ))
+                            .child(self.button(
+                                "relay-mode",
+                                self.text("preferences.relay"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.cycle_relay(cx),
+                            )),
                     )
                     .child(
                         div()
@@ -1307,12 +1686,24 @@ impl Render for AlterSendmeApp {
                                                         ),
                                                 )
                                             })
+                                            .when(self.history_open, |view| {
+                                                view.child(history_panel(self, colors, cx))
+                                            })
                                             .child(
                                                 div()
                                                     .text_sm()
                                                     .text_color(colors.muted)
                                                     .child(self.status.clone()),
-                                            ),
+                                            )
+                                            .when(self.diagnostics.is_some(), |view| {
+                                                view.child(
+                                                    div().text_xs().text_color(colors.muted).child(
+                                                        self.diagnostics
+                                                            .clone()
+                                                            .unwrap_or_default(),
+                                                    ),
+                                                )
+                                            }),
                                     ),
                             ),
                     )
@@ -1490,7 +1881,7 @@ struct Palette {
     danger: Rgba,
 }
 
-fn progress_bar(progress: Progress, colors: Palette) -> gpui::Div {
+fn progress_bar(progress: &Progress, colors: Palette) -> gpui::Div {
     div()
         .h(px(8.0))
         .w_full()
@@ -1682,12 +2073,70 @@ fn completion_card(
             |app, cx| app.reveal_completed_path(cx),
         ))
         .child(app.button(
-            "receive-new",
-            app.copy("new"),
+            "receive-done",
+            if app.receive_phase == TransferPhase::Completed {
+                app.copy("new").to_owned()
+            } else {
+                app.text("transfer.done")
+            },
             true,
             colors,
             cx,
-            |app, cx| app.new_transfer(cx),
+            |app, cx| app.done_transfer(cx),
+        ))
+}
+
+fn history_panel(
+    app: &mut AlterSendmeApp,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui::Div {
+    let rows = app.history.iter().enumerate().fold(
+        div().flex().flex_col().gap_2(),
+        |panel, (_index, entry)| {
+            let ticket = entry.ticket.clone();
+            let path = entry.path.clone();
+            let summary = format!(
+                "{} | {} | {} bytes | {} ms | {}",
+                entry.role, entry.outcome, entry.size, entry.duration_ms, entry.date
+            );
+            panel.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_xs()
+                            .text_color(colors.muted)
+                            .truncate()
+                            .child(format!("{path} - {summary}")),
+                    )
+                    .when_some(ticket, |view, ticket| {
+                        view.child(app.button(
+                            ("history-copy", entry.size as usize),
+                            app.copy("copy"),
+                            true,
+                            colors,
+                            cx,
+                            move |app, cx| app.copy_history_ticket(ticket.clone(), cx),
+                        ))
+                    }),
+            )
+        },
+    );
+    rows.p_3()
+        .rounded_md()
+        .bg(colors.panel_alt)
+        .child(app.button(
+            "history-clear",
+            app.text("history.clear"),
+            !app.history.is_empty(),
+            colors,
+            cx,
+            |app, cx| app.clear_history(cx),
         ))
 }
 
@@ -1751,6 +2200,108 @@ fn path_size(path: &PathBuf) -> u64 {
     0
 }
 
+fn history_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.data_dir().join("history.json"))
+        .unwrap_or_else(|| PathBuf::from("alter-sendme-history.json"))
+}
+
+fn theme_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.config_dir().join("theme"))
+        .unwrap_or_else(|| PathBuf::from("alter-sendme-theme"))
+}
+
+fn load_theme() -> Theme {
+    match fs::read_to_string(theme_path()).ok().as_deref() {
+        Some("dark") => Theme::Dark,
+        Some("light") => Theme::Light,
+        _ => Theme::System,
+    }
+}
+
+fn persist_theme(theme: Theme) {
+    let path = theme_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let value = match theme {
+        Theme::System => "system",
+        Theme::Dark => "dark",
+        Theme::Light => "light",
+    };
+    let _ = fs::write(path, value);
+}
+
+fn load_history() -> Vec<HistoryEntry> {
+    fs::read_to_string(history_path())
+        .ok()
+        .and_then(|contents| serde_json::from_str(&contents).ok())
+        .unwrap_or_default()
+}
+
+fn persist_history(entries: &[HistoryEntry]) {
+    let path = history_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(contents) = serde_json::to_string_pretty(entries) {
+        let _ = fs::write(path, contents);
+    }
+}
+
+fn unix_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod history_tests {
+    use super::{HistoryEntry, Progress, TransferPhase};
+
+    #[test]
+    fn phase_model_exposes_idle_active_completion_and_failure() {
+        assert!(!TransferPhase::Idle.is_active());
+        assert!(TransferPhase::Preparing.is_active());
+        assert!(TransferPhase::Transporting.is_active());
+        assert!(!TransferPhase::Completed.is_active());
+        assert!(!TransferPhase::Failed.is_active());
+    }
+
+    #[test]
+    fn progress_reports_folder_counts_without_overflow() {
+        let progress = Progress {
+            processed: 10,
+            total: 10,
+            speed: 100.0,
+            current_name: Some("a.txt".into()),
+            completed_files: u32::MAX,
+            total_files: u32::MAX,
+        };
+        assert_eq!(progress.files_label("files"), "4294967295/4294967295 files");
+        assert_eq!(progress.percentage(), 100.0);
+    }
+
+    #[test]
+    fn history_entries_preserve_sender_ticket_and_outcome() {
+        let entry = HistoryEntry {
+            role: "sender".into(),
+            path: "C:/share/a.txt".into(),
+            size: 5,
+            duration_ms: 10,
+            speed: 500,
+            date: "1".into(),
+            outcome: "completed".into(),
+            ticket: Some("ticket".into()),
+        };
+        let encoded = serde_json::to_string(&entry).expect("history serializes");
+        let decoded: HistoryEntry = serde_json::from_str(&encoded).expect("history parses");
+        assert_eq!(decoded, entry);
+    }
+}
+
 fn utf16_to_byte_range(text: &str, range: Range<usize>) -> Range<usize> {
     let offset = |target: usize| {
         let mut units = 0;
@@ -1777,7 +2328,8 @@ mod tests {
             Progress {
                 processed: 20,
                 total: 10,
-                speed: 0.0
+                speed: 0.0,
+                ..Default::default()
             }
             .percentage(),
             100.0

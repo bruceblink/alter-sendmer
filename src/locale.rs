@@ -137,6 +137,8 @@ impl Locale {
             "finalizing" => "transfer.complete",
             "open_folder" => "receiver.openFolder",
             "transfer_complete" => "transfer.complete",
+            "failed" => "transfer.failed",
+            "try_again" => "transfer.tryAgain",
             other => other,
         };
         self.lookup(source_key)
