@@ -7,7 +7,7 @@ use gpui::prelude::*;
 use gpui::{
     AsyncApp, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
-    Window, WindowAppearance, div, px, relative, rgb,
+    Window, WindowAppearance, div, px, relative, rgb, svg,
 };
 use sendmer::{Role, SendResult, TransferEvent};
 use serde::{Deserialize, Serialize};
@@ -165,6 +165,7 @@ pub struct AlterSendmeApp {
     update_status: Option<String>,
     history: Vec<HistoryEntry>,
     history_open: bool,
+    locale_menu_open: bool,
     preferences: Preferences,
     diagnostics: Option<String>,
     receiver_help_open: bool,
@@ -242,6 +243,7 @@ impl AlterSendmeApp {
             update_status: None,
             history: load_history(),
             history_open: false,
+            locale_menu_open: false,
             preferences: load_preferences(),
             diagnostics: None,
             receiver_help_open: false,
@@ -577,14 +579,10 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
-    /// Advances through the bundled locale list and persists the selection for the next launch.
-    fn cycle_locale(&mut self, cx: &mut Context<Self>) {
-        let locales = Locale::all();
-        let index = locales
-            .iter()
-            .position(|locale| *locale == self.locale)
-            .unwrap_or(0);
-        self.locale = locales[(index + 1) % locales.len()];
+    /// Selects a locale from the dropdown and persists it for the next launch.
+    fn select_locale(&mut self, locale: Locale, cx: &mut Context<Self>) {
+        self.locale = locale;
+        self.locale_menu_open = false;
         persist_locale(self.locale);
         self.status = self.text("ready");
         cx.notify();
@@ -1755,6 +1753,9 @@ impl Render for AlterSendmeApp {
             .on_key_down(cx.listener(|app, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "v" && event.keystroke.modifiers.platform {
                     app.paste_ticket(cx);
+                } else if event.keystroke.key == "escape" && app.locale_menu_open {
+                    app.locale_menu_open = false;
+                    cx.notify();
                 } else if event.keystroke.key == "enter"
                     && app.tab == Tab::Receive
                     && !event.keystroke.modifiers.shift
@@ -1765,6 +1766,7 @@ impl Render for AlterSendmeApp {
             .child(
                 div()
                     .h(px(64.0))
+                    .flex_shrink(0.0)
                     .px_6()
                     .flex()
                     .items_center()
@@ -1778,6 +1780,7 @@ impl Render for AlterSendmeApp {
                             .gap_3()
                             .child(
                                 div()
+                                    .id("app-brand-mark")
                                     .size(px(32.0))
                                     .flex()
                                     .items_center()
@@ -1786,7 +1789,7 @@ impl Render for AlterSendmeApp {
                                     .bg(colors.accent)
                                     .text_color(colors.background)
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("A"),
+                                    .child(svg().path("alter-sendme-mark.svg").size(px(22.0))),
                             )
                             .child(
                                 div()
@@ -1842,23 +1845,94 @@ impl Render for AlterSendmeApp {
                             )
                             .child(
                                 div()
-                                    .id("locale-toggle")
-                                    .focusable()
-                                    .tab_stop(true)
-                                    .role(A11yRole::Button)
-                                    .aria_label(self.copy("language"))
-                                    .px_3()
-                                    .py_2()
-                                    .rounded_md()
-                                    .bg(colors.panel_alt)
-                                    .text_sm()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|app, _, _, cx| app.cycle_locale(cx)))
-                                    .child(format!(
-                                        "{}: {}",
-                                        self.copy("language"),
-                                        self.locale.label()
-                                    )),
+                                    .relative()
+                                    .child(
+                                        div()
+                                            .id("locale-toggle")
+                                            .focusable()
+                                            .tab_stop(true)
+                                            .role(A11yRole::ComboBox)
+                                            .aria_label(self.copy("language"))
+                                            .aria_expanded(self.locale_menu_open)
+                                            .px_3()
+                                            .py_2()
+                                            .rounded_md()
+                                            .bg(colors.panel_alt)
+                                            .text_sm()
+                                            .cursor_pointer()
+                                            .on_click(cx.listener(|app, _, _, cx| {
+                                                app.locale_menu_open = !app.locale_menu_open;
+                                                cx.notify();
+                                            }))
+                                            .child(format!(
+                                                "{}: {} v",
+                                                self.copy("language"),
+                                                self.locale.label()
+                                            )),
+                                    )
+                                    .when(self.locale_menu_open, |view| {
+                                        view.child(
+                                            div()
+                                                .id("locale-menu")
+                                                .absolute()
+                                                .top(px(42.0))
+                                                .right(px(0.0))
+                                                .w(px(220.0))
+                                                .max_h(px(420.0))
+                                                .overflow_y_scroll()
+                                                .flex()
+                                                .flex_col()
+                                                .gap_1()
+                                                .p_2()
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(colors.border)
+                                                .bg(colors.panel)
+                                                .text_sm()
+                                                .child(Locale::all().iter().fold(
+                                                    div().flex().flex_col().gap_1(),
+                                                    |menu, locale| {
+                                                        let selected = *locale == self.locale;
+                                                        let locale_value = *locale;
+                                                        menu.child(
+                                                            div()
+                                                                .id(format!(
+                                                                    "locale-option-{}",
+                                                                    locale.code()
+                                                                ))
+                                                                .focusable()
+                                                                .tab_stop(true)
+                                                                .role(A11yRole::ListBoxOption)
+                                                                .aria_label(locale.label())
+                                                                .aria_selected(selected)
+                                                                .px_2()
+                                                                .py_2()
+                                                                .rounded_md()
+                                                                .bg(if selected {
+                                                                    colors.accent
+                                                                } else {
+                                                                    colors.panel
+                                                                })
+                                                                .text_color(if selected {
+                                                                    colors.background
+                                                                } else {
+                                                                    colors.text
+                                                                })
+                                                                .cursor_pointer()
+                                                                .on_click(cx.listener(
+                                                                    move |app, _, _, cx| {
+                                                                        app.select_locale(
+                                                                            locale_value,
+                                                                            cx,
+                                                                        )
+                                                                    },
+                                                                ))
+                                                                .child(locale.label()),
+                                                        )
+                                                    },
+                                                )),
+                                        )
+                                    }),
                             ),
                     ),
             )
@@ -1870,15 +1944,18 @@ impl Render for AlterSendmeApp {
                     .min_w(px(0.0))
                     .min_h(px(0.0))
                     .flex()
+                    .flex_col()
                     .w_full()
                     .id("content-scroll")
                     .overflow_y_scroll()
                     .p_6()
+                    .pb(px(48.0))
                     .child(
                         div()
                             .w_full()
                             .min_w(px(0.0))
                             .min_h(px(0.0))
+                            .flex_shrink(0.0)
                             .max_w(px(720.0))
                             .mx_auto()
                             .flex()
@@ -1954,6 +2031,7 @@ impl Render for AlterSendmeApp {
                                 div()
                                     .min_w(px(0.0))
                                     .min_h(px(0.0))
+                                    .flex_shrink(0.0)
                                     .rounded_md()
                                     .border_1()
                                     .border_color(colors.border)
@@ -2003,6 +2081,7 @@ impl Render for AlterSendmeApp {
             .child(
                 div()
                     .h(px(46.0))
+                    .flex_shrink(0.0)
                     .px_6()
                     .flex()
                     .items_center()

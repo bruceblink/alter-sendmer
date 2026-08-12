@@ -5,7 +5,27 @@ mod locale;
 mod transfer;
 
 use gpui::*;
-use std::time::{Duration, Instant};
+use std::{
+    borrow::Cow,
+    time::{Duration, Instant},
+};
+
+struct AppAssets;
+
+impl AssetSource for AppAssets {
+    fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
+        match path {
+            "alter-sendme-mark.svg" => Ok(Some(Cow::Borrowed(include_bytes!(
+                "../assets/alter-sendme-mark.svg"
+            )))),
+            _ => Ok(None),
+        }
+    }
+
+    fn list(&self, _path: &str) -> anyhow::Result<Vec<SharedString>> {
+        Ok(vec!["alter-sendme-mark.svg".into()])
+    }
+}
 
 actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 
@@ -30,63 +50,65 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
     let _runtime_guard = runtime.enter();
-    gpui_platform::application().run(move |cx| {
-        cx.set_menus(vec![Menu {
-            name: "AlterSendme".into(),
-            items: vec![MenuItem::action("Quit AlterSendme", Quit)],
-            disabled: false,
-        }]);
-        cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
-        cx.bind_keys([
-            KeyBinding::new("cmd-q", Quit, None),
-            KeyBinding::new("ctrl-q", Quit, None),
-            KeyBinding::new("alt-f4", Quit, None),
-            KeyBinding::new("tab", Tab, None),
-            KeyBinding::new("shift-tab", TabPrev, None),
-        ]);
-        cx.on_window_closed(|cx, _| {
-            if cx.windows().is_empty() {
-                cx.quit();
-            }
-        })
-        .detach();
-
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(1024.0), px(640.0)), cx)),
-            window_min_size: Some(size(px(760.0), px(560.0))),
-            is_resizable: true,
-            is_minimizable: true,
-            titlebar: Some(TitlebarOptions {
-                title: Some("AlterSendme".into()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
-        if let Err(error) = cx.open_window(options, move |window, cx| {
-            let app = cx.new(|cx| app::AlterSendmeApp::new(started_at, window, cx));
-            // Keep the entity alive until the app-level quit hook has drained transfer resources.
-            let app_for_quit = app.clone();
-            cx.on_app_quit(move |cx| {
-                let (send_result, receive_done) =
-                    app_for_quit.update(cx, |app, _| app.take_shutdown_resources());
-                async move {
-                    let cleanup = async move {
-                        if let Some(done) = receive_done {
-                            let _ = done.await;
-                        }
-                        if let Some(result) = send_result {
-                            let _ = result.shutdown().await;
-                        }
-                    };
-                    let _ = tokio::time::timeout(Duration::from_secs(2), cleanup).await;
+    gpui_platform::application()
+        .with_assets(AppAssets)
+        .run(move |cx| {
+            cx.set_menus(vec![Menu {
+                name: "AlterSendme".into(),
+                items: vec![MenuItem::action("Quit AlterSendme", Quit)],
+                disabled: false,
+            }]);
+            cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
+            cx.bind_keys([
+                KeyBinding::new("cmd-q", Quit, None),
+                KeyBinding::new("ctrl-q", Quit, None),
+                KeyBinding::new("alt-f4", Quit, None),
+                KeyBinding::new("tab", Tab, None),
+                KeyBinding::new("shift-tab", TabPrev, None),
+            ]);
+            cx.on_window_closed(|cx, _| {
+                if cx.windows().is_empty() {
+                    cx.quit();
                 }
             })
             .detach();
-            app
-        }) {
-            tracing::error!(error = %error, "failed to open AlterSendme window");
-            cx.quit();
-        }
-    });
+
+            let options = WindowOptions {
+                window_bounds: Some(WindowBounds::centered(size(px(1024.0), px(720.0)), cx)),
+                window_min_size: Some(size(px(760.0), px(560.0))),
+                is_resizable: true,
+                is_minimizable: true,
+                titlebar: Some(TitlebarOptions {
+                    title: Some("AlterSendme".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            if let Err(error) = cx.open_window(options, move |window, cx| {
+                let app = cx.new(|cx| app::AlterSendmeApp::new(started_at, window, cx));
+                // Keep the entity alive until the app-level quit hook has drained transfer resources.
+                let app_for_quit = app.clone();
+                cx.on_app_quit(move |cx| {
+                    let (send_result, receive_done) =
+                        app_for_quit.update(cx, |app, _| app.take_shutdown_resources());
+                    async move {
+                        let cleanup = async move {
+                            if let Some(done) = receive_done {
+                                let _ = done.await;
+                            }
+                            if let Some(result) = send_result {
+                                let _ = result.shutdown().await;
+                            }
+                        };
+                        let _ = tokio::time::timeout(Duration::from_secs(2), cleanup).await;
+                    }
+                })
+                .detach();
+                app
+            }) {
+                tracing::error!(error = %error, "failed to open AlterSendme window");
+                cx.quit();
+            }
+        });
     Ok(())
 }

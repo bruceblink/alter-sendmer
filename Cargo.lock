@@ -193,6 +193,7 @@ dependencies = [
  "anyhow",
  "async-channel",
  "directories",
+ "embed-resource",
  "gpui",
  "gpui_platform",
  "iroh",

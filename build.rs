@@ -31,6 +31,10 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("out dir"));
     let output_path = out_dir.join("locale_data.rs");
 
+    println!("cargo:rerun-if-changed=assets/alter-sendme.rc");
+    println!("cargo:rerun-if-changed=assets/alter-sendme.ico");
+    println!("cargo:rerun-if-changed=assets/alter-sendme-mark.svg");
+
     println!("cargo:rerun-if-changed={}", locale_dir.display());
     let mut output = String::from(
         "pub fn lookup(locale: &str, key: &str) -> Option<&'static str> {\n    match locale {\n",
@@ -71,6 +75,12 @@ fn main() {
 
     output.push_str("        _ => None,\n    }\n}\n");
     fs::write(output_path, output).expect("write generated locale table");
+
+    // Embed the branded Windows icon in release and local Windows builds.
+    #[cfg(windows)]
+    embed_resource::compile("assets/alter-sendme.rc", embed_resource::NONE)
+        .manifest_optional()
+        .expect("embed Windows application icon");
 }
 
 fn read_entries(path: &Path) -> Vec<(String, String)> {
