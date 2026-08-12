@@ -38,12 +38,19 @@
 
 ## M5: 发布与迁移
 
-- 生成 Windows/macOS/Linux 打包配置，移除旧 Tauri 构建依赖。
-- 将默认依赖切到发布版 `sendmer`，保留本地联调 profile。
+- 生成 Windows portable ZIP 与 Inno Setup 安装器，保留跨平台 Rust 构建入口。
+- 将默认依赖切到公开 `sendmer` `v0.6.0` Git 标签，确保干净检出可构建。
 - 发布前执行跨项目回归、资产检查和版本一致性校验。
+
+## 工程化交付
+
+- `.github/workflows/ci.yml` 在 Windows 上执行 fmt、check、clippy 和 workspace tests。
+- `.github/workflows/release.yml` 在版本标签上构建 portable ZIP、SHA-256 校验文件和 Inno Setup 安装器。
+- `scripts/package-portable.ps1` 与 `scripts/package-installer.ps1` 是本地与 CI 共用的唯一打包入口。
+- 安装器默认按用户权限安装到 `{autopf}`，不会要求管理员权限；portable 包不写入安装目录外的数据。
 
 ## 当前批次边界
 
 M0-M3 已形成可运行的原生发送/接收主线；本批补齐了 M4 的本地化生成、System 主题跟随和
-基础 AccessKit 标注。M4 剩余的在线更新安装、完整打包矩阵和跨平台人工视觉回归仍需在发布
-流水线中单独验证，不能由 `cargo test` 代替。
+基础 AccessKit 标注，并完成 Windows 发布工程化。在线更新依赖 GitHub release manifest，
+跨平台人工视觉回归仍需在发布流水线中单独验证，不能由 `cargo test` 代替。

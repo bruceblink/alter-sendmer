@@ -22,7 +22,7 @@ GPUI Window
      -> TransferController (异步 send/receive + cancel)
         -> sendmer::{send, receive} (P2P/TLS/QUIC)
      -> Platform adapters (path prompt, clipboard, reveal, theme)
-     -> Localization catalog (compile-time tables generated from alter-sendme/src/locales)
+     -> Localization catalog (compile-time tables generated from the bundled locales directory)
 ```
 
 ### 2.1 单进程状态模型
@@ -80,8 +80,8 @@ GPUI Window
 
 ## 6. 本地化与可访问性
 
-构建脚本读取原项目 `src/locales/<locale>/common.json`，在 `OUT_DIR` 生成只读 Rust 查找表；
-因此发布二进制不依赖运行时 JSON 文件，同时仍与原项目翻译源保持同步。GPUI 的主要动作、标签页、
+构建脚本读取项目内 `locales/<locale>/common.json`，在 `OUT_DIR` 生成只读 Rust 查找表；
+因此发布二进制不依赖运行时 JSON 文件。语言资源从原项目同步后随 GPUI 项目一起发布。GPUI 的主要动作、标签页、
 拖放区和 ticket 输入均声明了 AccessKit role 与 aria label，便于键盘和辅助技术识别。
 
 ## 7. 兼容性策略

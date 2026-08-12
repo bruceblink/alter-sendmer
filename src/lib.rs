@@ -27,6 +27,8 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::centered(size(px(1024.0), px(640.0)), cx)),
             window_min_size: Some(size(px(760.0), px(560.0))),
+            is_resizable: true,
+            is_minimizable: true,
             titlebar: Some(TitlebarOptions {
                 title: Some("AlterSendme".into()),
                 ..Default::default()

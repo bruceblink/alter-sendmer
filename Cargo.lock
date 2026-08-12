@@ -196,6 +196,7 @@ dependencies = [
  "gpui",
  "gpui_platform",
  "log",
+ "reqwest",
  "sendmer",
  "serde",
  "serde_json",
@@ -6333,6 +6334,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
@@ -6732,7 +6735,8 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "sendmer"
-version = "0.5.1"
+version = "0.6.0"
+source = "git+https://github.com/bruceblink/sendmer.git?tag=v0.6.0#39bfa5eeee6481e0d8d795aba6ca6c9361381763"
 dependencies = [
  "anyhow",
  "clap",

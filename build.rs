@@ -22,7 +22,7 @@ fn flatten(value: &Value, prefix: &str, entries: &mut Vec<(String, String)>) {
 }
 
 fn locale_source_dir(manifest_dir: &Path) -> PathBuf {
-    manifest_dir.join("../alter-sendme/src/locales")
+    manifest_dir.join("locales")
 }
 
 fn main() {

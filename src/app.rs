@@ -10,6 +10,7 @@ use gpui::{
     Window, WindowAppearance, div, px, rgb,
 };
 use sendmer::{Role, SendResult, TransferEvent};
+use serde::Deserialize;
 use std::{
     ops::Range,
     path::PathBuf,
@@ -17,6 +18,11 @@ use std::{
 };
 
 const MAX_TICKET_LEN: usize = 16_384;
+const UPDATE_MANIFEST_URL: &str =
+    "https://github.com/bruceblink/alter-sendme/releases/latest/download/latest.json";
+const GITHUB_RELEASE_URL: &str =
+    "https://api.github.com/repos/bruceblink/alter-sendme/releases/latest";
+const RELEASES_URL: &str = "https://github.com/bruceblink/alter-sendme/releases/latest";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -89,6 +95,34 @@ pub struct AlterSendmeApp {
     event_sender: Sender<(u64, TransferEvent)>,
     ticket_focus: FocusHandle,
     generation: u64,
+    update_checking: bool,
+    update_info: Option<UpdateInfo>,
+    update_status: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct UpdateInfo {
+    version: String,
+    download_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateManifest {
+    version: String,
+    #[serde(default)]
+    platforms: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    assets: Vec<GitHubAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubAsset {
+    name: String,
+    browser_download_url: String,
 }
 
 impl AlterSendmeApp {
@@ -127,6 +161,9 @@ impl AlterSendmeApp {
             event_sender,
             ticket_focus: cx.focus_handle(),
             generation: 0,
+            update_checking: false,
+            update_info: None,
+            update_status: None,
         };
         let entity = cx.entity().downgrade();
         cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -196,12 +233,36 @@ impl AlterSendmeApp {
         }
     }
 
+    fn text(&self, key: &str) -> String {
+        self.locale
+            .lookup(key)
+            .or_else(|| Locale::English.lookup(key))
+            .unwrap_or(key)
+            .to_owned()
+    }
+
+    fn status_text(&self, key: &str, fallback: &str) -> String {
+        let value = self.text(key);
+        if value == key {
+            fallback.to_owned()
+        } else {
+            value
+        }
+    }
+
     fn select_path(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         if path.exists() {
             self.selected_is_dir = path.is_dir();
             self.selected_path = Some(path);
             self.error = None;
-            self.status = "Path selected".to_owned();
+            self.status = self.status_text(
+                if self.selected_is_dir {
+                    "path_selected_folder"
+                } else {
+                    "path_selected_file"
+                },
+                "Path selected",
+            );
             cx.notify();
         }
     }
@@ -243,7 +304,7 @@ impl AlterSendmeApp {
                 {
                     let _ = app.update(&mut cx, |app, cx| {
                         app.save_path = path;
-                        app.status = "Download folder selected".to_owned();
+                        app.status = app.status_text("save", "Download folder selected");
                         cx.notify();
                     });
                 }
@@ -256,28 +317,72 @@ impl AlterSendmeApp {
     fn reveal_completed_path(&mut self, cx: &mut Context<Self>) {
         if let Some(path) = self.completed_path.as_ref() {
             cx.reveal_path(path);
-            self.status = "Opened downloaded item".to_owned();
+            self.status = self.status_text("download_completed", "Opened downloaded item");
             cx.notify();
         }
     }
 
-    /// Opens the project website used by the original footer's update action.
-    fn open_release_page(&mut self, cx: &mut Context<Self>) {
-        cx.open_url("https://github.com/bruceblink/alter-sendme/releases");
-        self.status = "Opened release page".to_owned();
+    /// Checks the signed release manifest without blocking the GPUI event loop.
+    pub(crate) fn check_for_updates(&mut self, cx: &mut Context<Self>) {
+        if self.update_checking {
+            return;
+        }
+        self.update_checking = true;
+        self.update_status = Some(self.text("update.checking"));
+        cx.notify();
+        let app = cx.entity().downgrade();
+        cx.spawn(move |_, cx: &mut AsyncApp| {
+            let mut cx = cx.clone();
+            async move {
+                let result = fetch_update().await;
+                let _ = app.update(&mut cx, |app, cx| {
+                    app.update_checking = false;
+                    match result {
+                        Ok(Some(info)) => {
+                            app.update_status = Some(
+                                app.text("update.found")
+                                    .replace("{{version}}", &info.version),
+                            );
+                            app.update_info = Some(info);
+                        }
+                        Ok(None) => {
+                            app.update_info = None;
+                            app.update_status = Some(app.text("update.upToDate"));
+                        }
+                        Err(error) => {
+                            app.update_info = None;
+                            app.update_status =
+                                Some(format!("{}: {error}", app.text("update.failed")));
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Opens the newest release asset after the manifest check finds a newer version.
+    fn open_update_or_check(&mut self, cx: &mut Context<Self>) {
+        if let Some(info) = &self.update_info {
+            cx.open_url(&info.download_url);
+            self.status = self.text("update.installed");
+        } else if !self.update_checking {
+            self.check_for_updates(cx);
+        }
         cx.notify();
     }
 
     /// Opens the original project's sponsorship page without coupling the core transfer crate to it.
     fn open_sponsor_page(&mut self, cx: &mut Context<Self>) {
         cx.open_url("https://buymeacoffee.com/bruceblink");
-        self.status = "Opened sponsorship page".to_owned();
+        self.status = self.status_text("donate", "Donation page opened");
         cx.notify();
     }
 
     fn start_sharing(&mut self, cx: &mut Context<Self>) {
         let Some(path) = self.selected_path.clone() else {
-            self.error = Some("Choose a file or folder first".to_owned());
+            self.error = Some(self.text("sender.dropFilesHere"));
             cx.notify();
             return;
         };
@@ -288,7 +393,7 @@ impl AlterSendmeApp {
         let generation = self.generation;
         self.send_phase = TransferPhase::Preparing;
         self.transfer_started_at = Some(Instant::now());
-        self.status = "Preparing encrypted share...".to_owned();
+        self.status = self.status_text("preparing", "Preparing encrypted share...");
         self.error = None;
         let events = self.event_sender.clone();
         let task = tokio::spawn(transfer::start_send(path, events, generation));
@@ -318,13 +423,13 @@ impl AlterSendmeApp {
                 self.ticket = Some(result.ticket.to_string());
                 self.send_result = Some(result);
                 self.send_phase = TransferPhase::Sharing;
-                self.status = "Listening for a receiver".to_owned();
+                self.status = self.status_text("listening", "Listening for a receiver");
             }
             Err(error) => {
                 self.send_abort = None;
                 self.send_phase = TransferPhase::Idle;
                 self.error = Some(error);
-                self.status = "Sharing failed".to_owned();
+                self.status = self.status_text("transfer_failed", "Sharing failed");
             }
         }
         cx.notify();
@@ -339,12 +444,12 @@ impl AlterSendmeApp {
         let Some(result) = self.send_result.take() else {
             self.send_phase = TransferPhase::Idle;
             self.transfer_started_at = None;
-            self.status = "Ready".to_owned();
+            self.status = self.status_text("ok", "Ready");
             cx.notify();
             return;
         };
         self.send_phase = TransferPhase::Stopping;
-        self.status = "Stopping share...".to_owned();
+        self.status = self.status_text("stopping", "Stopping share...");
         let task =
             tokio::spawn(async move { result.shutdown().await.map_err(|error| error.to_string()) });
         let app = cx.entity().downgrade();
@@ -360,7 +465,7 @@ impl AlterSendmeApp {
                         app.send_phase = TransferPhase::Idle;
                         app.ticket = None;
                         app.transfer_started_at = None;
-                        app.status = "Ready".to_owned();
+                        app.status = app.status_text("ok", "Ready");
                         if let Err(error) = outcome {
                             app.error = Some(error);
                         }
@@ -375,7 +480,7 @@ impl AlterSendmeApp {
     fn copy_ticket(&mut self, cx: &mut Context<Self>) {
         if let Some(ticket) = self.ticket.clone() {
             cx.write_to_clipboard(ticket.into());
-            self.status = "Ticket copied to clipboard".to_owned();
+            self.status = self.status_text("ticket_copied", "Ticket copied to clipboard");
             cx.notify();
         }
     }
@@ -393,7 +498,7 @@ impl AlterSendmeApp {
     fn start_receiving(&mut self, cx: &mut Context<Self>) {
         let ticket = self.ticket_input.trim().to_owned();
         if ticket.is_empty() {
-            self.error = Some("Paste a receive ticket first".to_owned());
+            self.error = Some(self.text("receiver.pasteTicket"));
             cx.notify();
             return;
         }
@@ -404,7 +509,7 @@ impl AlterSendmeApp {
         let generation = self.generation;
         self.receive_phase = TransferPhase::Connecting;
         self.transfer_started_at = Some(Instant::now());
-        self.status = "Connecting to sender...".to_owned();
+        self.status = self.status_text("connecting", "Connecting to sender...");
         self.error = None;
         let task = tokio::spawn(transfer::start_receive(
             ticket,
@@ -452,13 +557,13 @@ impl AlterSendmeApp {
                     .unwrap_or(self.started_at)
                     .elapsed();
                 self.transfer_started_at = None;
-                self.status = "Download completed".to_owned();
+                self.status = self.status_text("download_completed", "Download completed");
             }
             Err(error) => {
                 self.receive_phase = TransferPhase::Idle;
                 self.transfer_started_at = None;
                 self.error = Some(error);
-                self.status = "Receive failed".to_owned();
+                self.status = self.status_text("receive_failed", "Receive failed");
             }
         }
         cx.notify();
@@ -471,7 +576,7 @@ impl AlterSendmeApp {
         }
         self.receive_phase = TransferPhase::Idle;
         self.transfer_started_at = None;
-        self.status = "Ready".to_owned();
+        self.status = self.status_text("ok", "Ready");
         cx.notify();
     }
 
@@ -502,7 +607,7 @@ impl AlterSendmeApp {
             TransferPhase::Connecting | TransferPhase::Transporting
         );
         if active {
-            self.error = Some("Stop the active transfer before starting a new one".to_owned());
+            self.error = Some(self.text("transfer.stopped"));
             cx.notify();
             return;
         }
@@ -527,7 +632,7 @@ impl AlterSendmeApp {
         self.completed_duration = Duration::ZERO;
         self.transfer_started_at = None;
         self.error = None;
-        self.status = "Ready".to_owned();
+        self.status = self.status_text("ok", "Ready");
         cx.notify();
     }
 
@@ -542,14 +647,14 @@ impl AlterSendmeApp {
             TransferEvent::Started { role: Role::Sender } => {
                 self.send_phase = TransferPhase::Sharing;
                 self.transfer_started_at = Some(Instant::now());
-                self.status = "Listening for a receiver".to_owned();
+                self.status = self.status_text("listening", "Listening for a receiver");
             }
             TransferEvent::Started {
                 role: Role::Receiver,
             } => {
                 self.receive_phase = TransferPhase::Transporting;
                 self.transfer_started_at = Some(Instant::now());
-                self.status = "Downloading in progress".to_owned();
+                self.status = self.status_text("downloading", "Downloading in progress");
             }
             TransferEvent::Progress {
                 role: Role::Sender,
@@ -563,7 +668,7 @@ impl AlterSendmeApp {
                     total,
                     speed,
                 };
-                self.status = "Sharing in progress".to_owned();
+                self.status = self.status_text("sharing", "Sharing in progress");
             }
             TransferEvent::Progress {
                 role: Role::Receiver,
@@ -577,7 +682,7 @@ impl AlterSendmeApp {
                     total,
                     speed,
                 };
-                self.status = "Downloading in progress".to_owned();
+                self.status = self.status_text("downloading", "Downloading in progress");
             }
             TransferEvent::FileNames {
                 role: Role::Receiver,
@@ -600,20 +705,20 @@ impl AlterSendmeApp {
                     .unwrap_or(self.started_at)
                     .elapsed();
                 self.transfer_started_at = None;
-                self.status = "Transfer completed".to_owned();
+                self.status = self.status_text("transfer_completed", "Transfer completed");
             }
             TransferEvent::Completed {
                 role: Role::Receiver,
             } => {
                 self.receive_phase = TransferPhase::Transporting;
-                self.status = "Finalizing download".to_owned();
+                self.status = self.status_text("finalizing", "Finalizing download");
             }
             TransferEvent::Failed { message, .. } => {
                 self.error = Some(message);
                 self.send_phase = TransferPhase::Idle;
                 self.receive_phase = TransferPhase::Idle;
                 self.transfer_started_at = None;
-                self.status = "Transfer failed".to_owned();
+                self.status = self.status_text("transfer_failed", "Transfer failed");
             }
         }
         cx.notify();
@@ -710,7 +815,7 @@ impl AlterSendmeApp {
             .selected_path
             .as_ref()
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "No file or folder selected".to_owned());
+            .unwrap_or_else(|| self.status_text("receiver.noFolderSelected", "No file selected"));
         let ready = self.send_phase == TransferPhase::Idle;
         let completed = self.send_phase == TransferPhase::Completed;
         let sharing = matches!(
@@ -732,7 +837,7 @@ impl AlterSendmeApp {
                 div()
                     .text_sm()
                     .text_color(colors.muted)
-                    .child("Encrypted peer-to-peer transfer without cloud storage"),
+                    .child(self.text("sender.subtitle")),
             )
             .child(
                 div()
@@ -766,7 +871,7 @@ impl AlterSendmeApp {
                         div()
                             .text_xs()
                             .text_color(colors.muted)
-                            .child("or click to browse"),
+                            .child(self.text("sender.orBrowse")),
                     )
                     .child(
                         div()
@@ -862,7 +967,7 @@ impl AlterSendmeApp {
                 div()
                     .text_sm()
                     .text_color(colors.muted)
-                    .child("Download files from a sender using an encrypted connection"),
+                    .child(self.text("receiver.subtitle")),
             )
             .when(!receiving, |view| {
                 view.child(
@@ -874,7 +979,7 @@ impl AlterSendmeApp {
                             div()
                                 .text_sm()
                                 .font_weight(FontWeight::SEMIBOLD)
-                                .child("Receive ticket"),
+                                .child(self.text("receiver.pasteTicket")),
                         )
                         .child(ticket_input(self, colors, cx)),
                 )
@@ -894,7 +999,7 @@ impl AlterSendmeApp {
                         )
                         .child(self.button(
                             "choose-save",
-                            "Browse",
+                            self.text("browse"),
                             true,
                             colors,
                             cx,
@@ -905,11 +1010,14 @@ impl AlterSendmeApp {
                     div()
                         .flex()
                         .gap_3()
-                        .child(
-                            self.button("paste-ticket", "Paste", true, colors, cx, |app, cx| {
-                                app.paste_ticket(cx)
-                            }),
-                        )
+                        .child(self.button(
+                            "paste-ticket",
+                            self.text("receiver.pasteTicket"),
+                            true,
+                            colors,
+                            cx,
+                            |app, cx| app.paste_ticket(cx),
+                        ))
                         .child(self.button(
                             "receive-start",
                             self.copy("receive_action"),
@@ -930,7 +1038,7 @@ impl AlterSendmeApp {
                 .child(progress_bar(progress, colors))
                 .child(self.button(
                     "receive-stop",
-                    "Stop receiving",
+                    self.text("receiver.stopReceiving"),
                     true,
                     colors,
                     cx,
@@ -1046,9 +1154,9 @@ impl Render for AlterSendmeApp {
                                         "{}: {}",
                                         self.copy("theme"),
                                         match self.theme {
-                                            Theme::System => "System",
-                                            Theme::Dark => "Dark",
-                                            Theme::Light => "Light",
+                                            Theme::System => self.text("theme.system"),
+                                            Theme::Dark => self.text("theme.dark"),
+                                            Theme::Light => self.text("theme.light"),
                                         }
                                     )),
                             )
@@ -1165,7 +1273,15 @@ impl Render for AlterSendmeApp {
                             .border_color(colors.border)
                             .text_xs()
                             .text_color(colors.muted)
-                            .child("Direct encrypted transfer · sendmer core")
+                            .child(self.text("appSubtitle"))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .px_3()
+                                    .text_center()
+                                    .truncate()
+                                    .child(self.update_status.clone().unwrap_or_default()),
+                            )
                             .child(
                                 div()
                                     .flex()
@@ -1190,7 +1306,7 @@ impl Render for AlterSendmeApp {
                                             .on_click(cx.listener(|app, _, _, cx| {
                                                 app.open_sponsor_page(cx)
                                             }))
-                                            .child("Donate"),
+                                            .child(self.text("donate")),
                                     )
                                     .child(
                                         div()
@@ -1199,11 +1315,17 @@ impl Render for AlterSendmeApp {
                                             .aria_label("Check for updates")
                                             .cursor_pointer()
                                             .on_click(cx.listener(|app, _, _, cx| {
-                                                app.open_release_page(cx)
+                                                app.open_update_or_check(cx)
                                             }))
-                                            .child("Check update"),
+                                            .child(if self.update_checking {
+                                                self.text("update.checking")
+                                            } else if self.update_info.is_some() {
+                                                self.text("update.found")
+                                            } else {
+                                                self.text("update.checkNow")
+                                            }),
                                     )
-                                    .child(div().child("v0.2.0")),
+                                    .child(div().child(format!("v{}", env!("CARGO_PKG_VERSION")))),
                             ),
                     ),
             )
@@ -1329,6 +1451,102 @@ fn progress_bar(progress: Progress, colors: Palette) -> gpui::Div {
         )
 }
 
+async fn fetch_update() -> anyhow::Result<Option<UpdateInfo>> {
+    let client = reqwest::Client::new();
+    let manifest_response = client
+        .get(UPDATE_MANIFEST_URL)
+        .header("User-Agent", "AlterSendme-GPUI")
+        .send()
+        .await?;
+    let (version, download_url) = if manifest_response.status().is_success() {
+        let manifest = manifest_response.json::<UpdateManifest>().await?;
+        let platform = current_platform_key();
+        let download_url = manifest
+            .platforms
+            .get(platform)
+            .and_then(|value| value.get("url"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| RELEASES_URL.to_owned());
+        (manifest.version, download_url)
+    } else {
+        let release = client
+            .get(GITHUB_RELEASE_URL)
+            .header("User-Agent", "AlterSendme-GPUI")
+            .send()
+            .await?
+            .error_for_status()?
+            .json::<GitHubRelease>()
+            .await?;
+        let version = release.tag_name.trim_start_matches('v').to_owned();
+        let suffix = current_asset_suffix();
+        let download_url = release
+            .assets
+            .iter()
+            .find(|asset| asset.name.contains(suffix))
+            .map(|asset| asset.browser_download_url.clone())
+            .unwrap_or_else(|| RELEASES_URL.to_owned());
+        (version, download_url)
+    };
+    if !is_newer_version(env!("CARGO_PKG_VERSION"), &version) {
+        return Ok(None);
+    }
+    Ok(Some(UpdateInfo {
+        version,
+        download_url,
+    }))
+}
+
+fn current_platform_key() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows-x86_64-nsis"
+    } else if cfg!(target_os = "macos") {
+        "darwin-universal"
+    } else {
+        "linux-x86_64"
+    }
+}
+
+fn current_asset_suffix() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "x64-setup.exe"
+    } else if cfg!(target_os = "macos") {
+        ".dmg"
+    } else {
+        ".AppImage"
+    }
+}
+
+fn is_newer_version(current: &str, candidate: &str) -> bool {
+    let parse = |version: &str| {
+        let mut parts = [0_u64; 3];
+        for (index, part) in version
+            .trim_start_matches('v')
+            .split('.')
+            .take(3)
+            .enumerate()
+        {
+            parts[index] = part.parse().unwrap_or(0);
+        }
+        parts
+    };
+    parse(candidate) > parse(current)
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::is_newer_version;
+
+    #[test]
+    fn compares_semver_like_versions() {
+        assert!(is_newer_version("0.2.0", "0.2.1"));
+        assert!(is_newer_version("0.2.0", "1.0.0"));
+        assert!(!is_newer_version("0.2.0", "0.2.0"));
+        assert!(!is_newer_version("0.2.0", "0.1.99"));
+        assert!(is_newer_version("v0.2.0", "v0.3.0"));
+    }
+}
+
 fn ticket_card(
     ticket: &str,
     colors: Palette,
@@ -1391,13 +1609,13 @@ fn completion_card(
                 .text_lg()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(colors.accent)
-                .child("Transfer complete"),
+                .child(app.text("transfer_complete")),
         )
         .child(
             div().text_sm().child(
                 app.completed_name
                     .clone()
-                    .unwrap_or_else(|| "Downloaded file".to_owned()),
+                    .unwrap_or_else(|| app.text("transfer.file")),
             ),
         )
         .child(div().text_sm().text_color(colors.muted).child(format!(
@@ -1407,7 +1625,7 @@ fn completion_card(
         )))
         .child(app.button(
             "receive-reveal",
-            "Open in file manager",
+            app.text("open_folder"),
             app.completed_path.is_some(),
             colors,
             cx,
