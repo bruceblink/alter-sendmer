@@ -7,7 +7,7 @@ use gpui::prelude::*;
 use gpui::{
     AsyncApp, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
-    Window, WindowAppearance, div, px, rgb,
+    Window, WindowAppearance, div, px, relative, rgb,
 };
 use sendmer::{Role, SendResult, TransferEvent};
 use serde::{Deserialize, Serialize};
@@ -2152,6 +2152,9 @@ struct Palette {
 }
 
 fn progress_bar(progress: &Progress, colors: Palette) -> gpui::Div {
+    // Keep the fill proportional to its parent so the bar remains usable at the
+    // minimum window size instead of overflowing a fixed pixel width.
+    let fraction = progress_fraction(progress);
     div()
         .h(px(8.0))
         .w_full()
@@ -2160,7 +2163,7 @@ fn progress_bar(progress: &Progress, colors: Palette) -> gpui::Div {
         .child(
             div()
                 .h(px(8.0))
-                .w(px(progress.percentage().clamp(0.0, 100.0) * 6.4))
+                .w(relative(fraction))
                 .rounded_md()
                 .bg(colors.accent_alt),
         )
@@ -2274,6 +2277,11 @@ mod update_tests {
 /// without first creating a new transfer.
 fn tabs_locked(send_phase: TransferPhase, receive_phase: TransferPhase) -> bool {
     send_phase.is_active() || receive_phase.is_active()
+}
+
+/// Converts a transfer percentage into a stable relative fill fraction for layout.
+fn progress_fraction(progress: &Progress) -> f32 {
+    (progress.percentage() / 100.0).clamp(0.0, 1.0)
 }
 
 fn ticket_card(
@@ -2717,6 +2725,28 @@ mod tests {
             100.0
         );
     }
+
+    #[test]
+    fn progress_fraction_stays_within_relative_layout_bounds() {
+        assert_eq!(progress_fraction(&Progress::default()), 0.0);
+        assert_eq!(
+            progress_fraction(&Progress {
+                processed: 5,
+                total: 10,
+                ..Default::default()
+            }),
+            0.5
+        );
+        assert_eq!(
+            progress_fraction(&Progress {
+                processed: 20,
+                total: 10,
+                ..Default::default()
+            }),
+            1.0
+        );
+    }
+
     #[test]
     fn utf16_ranges_handle_non_bmp_ticket_text() {
         let text = "a😀b";
