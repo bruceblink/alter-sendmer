@@ -1799,6 +1799,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("theme-toggle")
+                                    .focusable()
+                                    .tab_stop(true)
                                     .role(A11yRole::Button)
                                     .aria_label(self.copy("theme"))
                                     .px_3()
@@ -1825,6 +1827,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("locale-toggle")
+                                    .focusable()
+                                    .tab_stop(true)
                                     .role(A11yRole::Button)
                                     .aria_label(self.copy("language"))
                                     .px_3()
@@ -2007,6 +2011,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("footer-new")
+                                    .focusable()
+                                    .tab_stop(true)
                                     .role(A11yRole::Button)
                                     .aria_label(self.copy("new"))
                                     .cursor_pointer()
@@ -2016,6 +2022,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("footer-sponsor")
+                                    .focusable()
+                                    .tab_stop(true)
                                     .role(A11yRole::Button)
                                     .aria_label(self.text("donate"))
                                     .cursor_pointer()
@@ -2027,6 +2035,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("footer-update")
+                                    .focusable()
+                                    .tab_stop(true)
                                     .role(A11yRole::Button)
                                     .aria_label(self.text("update.checkNow"))
                                     .cursor_pointer()
@@ -2310,6 +2320,10 @@ fn ticket_card(
         .child(
             div()
                 .id("copy-ticket-secondary")
+                .focusable()
+                .tab_stop(true)
+                .role(A11yRole::Button)
+                .aria_label(copy_label)
                 .h(px(32.0))
                 .px_3()
                 .flex()
