@@ -22,7 +22,7 @@ GPUI Window
      -> TransferController (异步 send/receive + cancel)
         -> sendmer::{send, receive} (P2P/TLS/QUIC)
      -> Platform adapters (path prompt, clipboard, reveal, theme)
-     -> Localization catalog (Rust static tables, locale fallback)
+     -> Localization catalog (compile-time tables generated from alter-sendme/src/locales)
 ```
 
 ### 2.1 单进程状态模型
@@ -59,8 +59,8 @@ GPUI Window
 | Tauri drag-drop | `ExternalPaths` + `.on_drop` |
 | `navigator.clipboard` | `App::write_to_clipboard(ClipboardItem::new_string)` |
 | opener reveal | `App::reveal_path` |
-| CSS theme variables | `Theme` + GPUI `Hsla` 调色板 |
-| i18next catalog | `Locale` + `copy()`/`text()` lookup，缺失回退英文 |
+| CSS theme variables | `Theme` + GPUI palette, with `WindowAppearance` for System mode |
+| i18next catalog | `Locale` + generated `common.json` lookup, missing keys fall back to English |
 
 票据输入使用 GPUI 原生 `ElementInputHandler`，因此支持中文输入法、选择、粘贴和键盘事件；不
 通过伪造的按钮或不可编辑标签替代真实文本框。
@@ -78,7 +78,13 @@ GPUI Window
 用户可见错误必须包含阶段（准备、共享、连接、接收）和底层错误消息；日志使用
 `tracing`/`log` 记录 ticket 生命周期和资源清理，不记录完整文件内容或私密 ticket 到持久日志。
 
-## 6. 兼容性策略
+## 6. 本地化与可访问性
+
+构建脚本读取原项目 `src/locales/<locale>/common.json`，在 `OUT_DIR` 生成只读 Rust 查找表；
+因此发布二进制不依赖运行时 JSON 文件，同时仍与原项目翻译源保持同步。GPUI 的主要动作、标签页、
+拖放区和 ticket 输入均声明了 AccessKit role 与 aria label，便于键盘和辅助技术识别。
+
+## 7. 兼容性策略
 
 初期以 Windows 为主要验收平台，GPUI 的 macOS/Linux 路径选择和窗口启动保持可编译。发送和
 接收协议行为由 `sendmer` 的跨平台测试负责；GPUI 客户端测试聚焦状态机、格式化、事件归并和

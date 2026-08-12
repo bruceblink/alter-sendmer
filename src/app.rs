@@ -1,12 +1,13 @@
 //! GPUI workbench and its state machine.
 
+use crate::locale::Locale;
 use crate::transfer;
 use async_channel::{Receiver, Sender};
 use gpui::prelude::*;
 use gpui::{
     AsyncApp, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
-    FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, UTF16Selection, Window, div, px,
-    rgb,
+    FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
+    Window, WindowAppearance, div, px, rgb,
 };
 use sendmer::{Role, SendResult, TransferEvent};
 use std::{
@@ -25,15 +26,9 @@ enum Tab {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Theme {
+    System,
     Dark,
     Light,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Locale {
-    English,
-    SimplifiedChinese,
-    Japanese,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,7 +101,7 @@ impl AlterSendmeApp {
         let app = Self {
             started_at,
             tab: Tab::Send,
-            theme: Theme::Dark,
+            theme: Theme::System,
             locale: Locale::English,
             send_phase: TransferPhase::Idle,
             receive_phase: TransferPhase::Idle,
@@ -143,8 +138,16 @@ impl AlterSendmeApp {
         app
     }
 
-    fn colors(&self) -> Palette {
-        if self.theme == Theme::Light {
+    fn colors(&self, appearance: WindowAppearance) -> Palette {
+        let dark = match self.theme {
+            Theme::System => matches!(
+                appearance,
+                WindowAppearance::Dark | WindowAppearance::VibrantDark
+            ),
+            Theme::Dark => true,
+            Theme::Light => false,
+        };
+        if !dark {
             Palette {
                 background: rgb(0xf2f5f9),
                 panel: rgb(0xffffff),
@@ -172,33 +175,10 @@ impl AlterSendmeApp {
     }
 
     fn copy(&self, key: &str) -> &'static str {
+        if let Some(value) = self.locale.ui_copy(key) {
+            return value;
+        }
         match (self.locale, key) {
-            (Locale::SimplifiedChinese, "send") => "发送",
-            (Locale::SimplifiedChinese, "receive") => "接收",
-            (Locale::SimplifiedChinese, "ready") => "就绪",
-            (Locale::SimplifiedChinese, "select") => "选择文件或文件夹",
-            (Locale::SimplifiedChinese, "drop") => "将文件或文件夹拖放到这里",
-            (Locale::SimplifiedChinese, "start") => "开始共享",
-            (Locale::SimplifiedChinese, "stop") => "停止共享",
-            (Locale::SimplifiedChinese, "save") => "保存目录",
-            (Locale::SimplifiedChinese, "receive_action") => "开始接收",
-            (Locale::SimplifiedChinese, "copy") => "复制 ticket",
-            (Locale::SimplifiedChinese, "new") => "新传输",
-            (Locale::SimplifiedChinese, "theme") => "主题",
-            (Locale::SimplifiedChinese, "language") => "语言",
-            (Locale::Japanese, "send") => "送信",
-            (Locale::Japanese, "receive") => "受信",
-            (Locale::Japanese, "ready") => "準備完了",
-            (Locale::Japanese, "select") => "ファイルまたはフォルダーを選択",
-            (Locale::Japanese, "drop") => "ファイルまたはフォルダーをここにドロップ",
-            (Locale::Japanese, "start") => "共有を開始",
-            (Locale::Japanese, "stop") => "共有を停止",
-            (Locale::Japanese, "save") => "保存先",
-            (Locale::Japanese, "receive_action") => "受信を開始",
-            (Locale::Japanese, "copy") => "ticket をコピー",
-            (Locale::Japanese, "new") => "新しい転送",
-            (Locale::Japanese, "theme") => "テーマ",
-            (Locale::Japanese, "language") => "言語",
             (_, "send") => "Send",
             (_, "receive") => "Receive",
             (_, "ready") => "Ready",
@@ -649,6 +629,8 @@ impl AlterSendmeApp {
         let active = self.tab == tab;
         div()
             .id(label)
+            .role(A11yRole::Tab)
+            .aria_label(label)
             .flex_1()
             .h(px(38.0))
             .flex()
@@ -690,6 +672,8 @@ impl AlterSendmeApp {
         let label = label.into();
         div()
             .id(id)
+            .role(A11yRole::Button)
+            .aria_label(label.clone())
             .h(px(38.0))
             .px_4()
             .flex()
@@ -753,6 +737,8 @@ impl AlterSendmeApp {
             .child(
                 div()
                     .id("send-drop-zone")
+                    .role(A11yRole::Button)
+                    .aria_label(self.copy("drop"))
                     .h(px(190.0))
                     .w_full()
                     .flex()
@@ -975,7 +961,7 @@ async fn pump_events(
 impl Render for AlterSendmeApp {
     /// Renders the complete send/receive workspace with a stable, bounded content column.
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let colors = self.colors();
+        let colors = self.colors(_window.appearance());
         div()
             .size_full()
             .flex()
@@ -1040,6 +1026,8 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .id("theme-toggle")
+                                    .role(A11yRole::Button)
+                                    .aria_label("Theme")
                                     .px_3()
                                     .py_2()
                                     .rounded_md()
@@ -1047,26 +1035,28 @@ impl Render for AlterSendmeApp {
                                     .text_sm()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|app, _, _, cx| {
-                                        app.theme = if app.theme == Theme::Dark {
-                                            Theme::Light
-                                        } else {
-                                            Theme::Dark
+                                        app.theme = match app.theme {
+                                            Theme::System => Theme::Dark,
+                                            Theme::Dark => Theme::Light,
+                                            Theme::Light => Theme::System,
                                         };
                                         cx.notify();
                                     }))
                                     .child(format!(
                                         "{}: {}",
                                         self.copy("theme"),
-                                        if self.theme == Theme::Dark {
-                                            "Dark"
-                                        } else {
-                                            "Light"
+                                        match self.theme {
+                                            Theme::System => "System",
+                                            Theme::Dark => "Dark",
+                                            Theme::Light => "Light",
                                         }
                                     )),
                             )
                             .child(
                                 div()
                                     .id("locale-toggle")
+                                    .role(A11yRole::Button)
+                                    .aria_label("Language")
                                     .px_3()
                                     .py_2()
                                     .rounded_md()
@@ -1074,21 +1064,18 @@ impl Render for AlterSendmeApp {
                                     .text_sm()
                                     .cursor_pointer()
                                     .on_click(cx.listener(|app, _, _, cx| {
-                                        app.locale = match app.locale {
-                                            Locale::English => Locale::SimplifiedChinese,
-                                            Locale::SimplifiedChinese => Locale::Japanese,
-                                            Locale::Japanese => Locale::English,
-                                        };
+                                        let locales = Locale::all();
+                                        let index = locales
+                                            .iter()
+                                            .position(|locale| *locale == app.locale)
+                                            .unwrap_or(0);
+                                        app.locale = locales[(index + 1) % locales.len()];
                                         cx.notify();
                                     }))
                                     .child(format!(
                                         "{}: {}",
                                         self.copy("language"),
-                                        match self.locale {
-                                            Locale::English => "English",
-                                            Locale::SimplifiedChinese => "简体中文",
-                                            Locale::Japanese => "日本語",
-                                        }
+                                        self.locale.label()
                                     )),
                             ),
                     )
@@ -1186,6 +1173,8 @@ impl Render for AlterSendmeApp {
                                     .child(
                                         div()
                                             .id("footer-new")
+                                            .role(A11yRole::Button)
+                                            .aria_label(self.copy("new"))
                                             .cursor_pointer()
                                             .on_click(
                                                 cx.listener(|app, _, _, cx| app.new_transfer(cx)),
@@ -1195,6 +1184,8 @@ impl Render for AlterSendmeApp {
                                     .child(
                                         div()
                                             .id("footer-sponsor")
+                                            .role(A11yRole::Button)
+                                            .aria_label("Donate")
                                             .cursor_pointer()
                                             .on_click(cx.listener(|app, _, _, cx| {
                                                 app.open_sponsor_page(cx)
@@ -1204,6 +1195,8 @@ impl Render for AlterSendmeApp {
                                     .child(
                                         div()
                                             .id("footer-update")
+                                            .role(A11yRole::Button)
+                                            .aria_label("Check for updates")
                                             .cursor_pointer()
                                             .on_click(cx.listener(|app, _, _, cx| {
                                                 app.open_release_page(cx)
@@ -1440,6 +1433,8 @@ fn ticket_input(
     let click_focus = focus.clone();
     div()
         .id("ticket-input")
+        .role(A11yRole::TextInput)
+        .aria_label("Receive ticket")
         .relative()
         .h(px(78.0))
         .w_full()

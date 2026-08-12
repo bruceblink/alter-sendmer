@@ -1,6 +1,7 @@
 //! Native GPUI application for AlterSendme.
 
 mod app;
+mod locale;
 mod transfer;
 
 use gpui::*;
