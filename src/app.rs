@@ -2219,7 +2219,7 @@ fn is_newer_version(current: &str, candidate: &str) -> bool {
 
 #[cfg(test)]
 mod update_tests {
-    use super::{current_asset_suffix, is_newer_version};
+    use super::{current_asset_suffix, current_platform_key, is_newer_version};
 
     #[test]
     fn compares_semver_like_versions() {
@@ -2234,6 +2234,7 @@ mod update_tests {
     #[cfg(target_os = "windows")]
     fn selects_the_windows_installer_published_by_release_workflow() {
         assert_eq!(current_asset_suffix(), "-windows-setup.exe");
+        assert_eq!(current_platform_key(), "windows-x86_64-nsis");
     }
 }
 

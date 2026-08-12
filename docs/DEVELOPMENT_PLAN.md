@@ -46,6 +46,7 @@
 
 - `.github/workflows/ci.yml` 在 Windows 上执行 fmt、check、clippy 和 workspace tests。
 - `.github/workflows/release.yml` 在版本标签上构建 portable ZIP、SHA-256 校验文件和 Inno Setup 安装器。
+- `scripts/write-release-manifest.ps1` 生成 `latest.json`，供 GPUI 客户端的检查更新入口读取。
 - `scripts/package-portable.ps1` 与 `scripts/package-installer.ps1` 是本地与 CI 共用的唯一打包入口。
 - 安装器默认按用户权限安装到 `{autopf}`，不会要求管理员权限；portable 包不写入安装目录外的数据。
 

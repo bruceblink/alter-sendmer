@@ -39,8 +39,10 @@ jobs:
       - name: Build release assets
         shell: pwsh
         run: |
-          .\scripts\package-portable.ps1 -Version ("${{ inputs.tag || github.ref_name }}".TrimStart('v')) -SkipBuild
-          .\scripts\package-installer.ps1 -Version "${{ inputs.tag || github.ref_name }}".TrimStart('v') -SkipBuild
+          $version = "${{ inputs.tag || github.ref_name }}".TrimStart('v')
+          .\scripts\package-portable.ps1 -Version $version -SkipBuild
+          .\scripts\package-installer.ps1 -Version $version -SkipBuild
+          .\scripts\write-release-manifest.ps1 -Version $version -Repository "${{ github.repository }}"
       - name: Publish draft release
         uses: softprops/action-gh-release@v2
         with:
@@ -52,3 +54,4 @@ jobs:
             dist/*.zip.sha256
             dist/*-setup.exe
             dist/*-setup.exe.sha256
+            dist/latest.json
