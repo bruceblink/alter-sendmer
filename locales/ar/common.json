@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "نقل مشفر مباشر · نواة sendmer",
   "send": "إرسال",
   "receive": "استقبال",
   "ok": "موافق",
@@ -88,4 +89,4 @@
     "openFolderFailed": "فشل فتح المجلد",
     "openFolderFailedDesc": "فشل فتح مجلد التنزيل"
   }
-}`r`n
+}

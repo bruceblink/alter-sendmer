@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "โอนย้ายแบบเข้ารหัสโดยตรง · แกน sendmer",
   "send": "ส่ง",
   "receive": "รับ",
   "ok": "ตกลง",
@@ -88,4 +89,4 @@
     "openFolderFailed": "การเปิดโฟลเดอร์ล้มเหลว",
     "openFolderFailedDesc": "ไม่สามารถเปิดโฟลเดอร์ดาวน์โหลดได้"
   }
-}`r`n
+}

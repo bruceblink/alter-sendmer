@@ -1,5 +1,6 @@
 {
     "appTitle": "AlterSendme",
+    "appSubtitle": "Bezpośredni szyfrowany transfer · rdzeń sendmer",
     "send": "Wyślij",
     "receive": "Odbierz",
     "ok": "OK",
@@ -88,4 +89,4 @@
       "openFolderFailed": "Nie udało się otworzyć folderu",
       "openFolderFailedDesc": "Nie udało się otworzyć folderu pobierania"
     }
-  }`r`n
+  }

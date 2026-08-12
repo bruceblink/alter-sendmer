@@ -1,5 +1,6 @@
 {
     "appTitle": "AlterSendme",
+    "appSubtitle": "انتقال مستقیم رمزگذاری‌شده · هسته sendmer",
     "send": "ارسال",
     "receive": "دریافت",
     "ok": "باشه",
@@ -88,4 +89,4 @@
       "openFolderFailed": "خطا در باز کردن فولدر",
       "openFolderFailedDesc": "باز کردن فولدر دانلود ناموفق بود"
     }
-  }`r`n
+  }

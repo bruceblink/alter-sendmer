@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Direkte krypterte overføringer · sendmer-kjerne",
   "send": "Send",
   "receive": "Motta",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Kunne ikke åpne mappe",
     "openFolderFailedDesc": "Kunne ikke åpne nedlastingsmappen"
   }
-}`r`n
+}

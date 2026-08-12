@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Прямая зашифрованная передача · ядро sendmer",
   "send": "Отправить",
   "receive": "Получить",
   "ok": "ОК",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Ошибка открытия папки",
     "openFolderFailedDesc": "Не удалось открыть папку для скачивания"
   }
-}`r`n
+}

@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Direkte verschlüsselte Übertragung · sendmer-Kern",
   "send": "Senden",
   "receive": "Empfangen",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Ordner öffnen fehlgeschlagen",
     "openFolderFailedDesc": "Download-Ordner konnte nicht geöffnet werden"
   }
-}`r`n
+}

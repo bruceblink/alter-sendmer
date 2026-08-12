@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "直接加密传输 · sendmer 核心",
   "send": "发送",
   "receive": "接收",
   "ok": "确定",
@@ -102,4 +103,4 @@
     "openFolderFailed": "打开文件夹失败",
     "openFolderFailedDesc": "无法打开下载文件夹"
   }
-}`r`n
+}

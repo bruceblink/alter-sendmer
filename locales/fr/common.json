@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Transfert chiffré direct · cœur sendmer",
   "send": "Envoyer",
   "receive": "Recevoir",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Échec de l'ouverture du dossier",
     "openFolderFailedDesc": "Échec de l'ouverture du dossier de téléchargement"
   }
-}`r`n
+}

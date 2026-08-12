@@ -941,6 +941,7 @@ impl AlterSendmeApp {
                     self.ticket.as_deref().unwrap_or_default(),
                     colors,
                     self.copy("copy"),
+                    self.text("sender.sendThisTicket"),
                     cx,
                     |app, cx| app.copy_ticket(cx),
                 ))
@@ -1551,6 +1552,7 @@ fn ticket_card(
     ticket: &str,
     colors: Palette,
     copy_label: &'static str,
+    ticket_hint: String,
     cx: &mut Context<AlterSendmeApp>,
     action: impl Fn(&mut AlterSendmeApp, &mut Context<AlterSendmeApp>) + 'static,
 ) -> gpui::Div {
@@ -1561,12 +1563,7 @@ fn ticket_card(
         .p_3()
         .rounded_md()
         .bg(colors.panel_alt)
-        .child(
-            div()
-                .text_xs()
-                .text_color(colors.muted)
-                .child("Share this ticket with the receiver"),
-        )
+        .child(div().text_xs().text_color(colors.muted).child(ticket_hint))
         .child(
             div()
                 .text_xs()

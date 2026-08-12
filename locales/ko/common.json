@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "직접 암호화 전송 · sendmer 코어",
   "send": "보내기",
   "receive": "받기",
   "ok": "확인",
@@ -88,4 +89,4 @@
     "openFolderFailed": "폴더 열기 실패",
     "openFolderFailedDesc": "다운로드 폴더를 열 수 없습니다"
   }
-}`r`n
+}

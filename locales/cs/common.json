@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Přímý šifrovaný přenos · jádro sendmer",
   "send": "Odeslat",
   "receive": "Přijmout",
   "ok": "OK",

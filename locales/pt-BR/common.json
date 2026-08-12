@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Transferência criptografada direta · núcleo sendmer",
   "send": "Enviar",
   "receive": "Receber",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Falha ao Abrir Pasta",
     "openFolderFailedDesc": "Falha ao abrir pasta de download"
   }
-}`r`n
+}

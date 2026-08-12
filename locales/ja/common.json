@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "直接暗号化転送 · sendmer コア",
   "send": "送信",
   "receive": "受信",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "フォルダを開くのに失敗しました",
     "openFolderFailedDesc": "ダウンロードフォルダを開けませんでした"
   }
-}`r`n
+}

@@ -1,5 +1,6 @@
 {
     "appTitle": "AlterSendme",
+    "appSubtitle": "सीधा एन्क्रिप्टेड ट्रांसफर · sendmer कोर",
     "send": "भेजें",
     "receive": "प्राप्त करें",
     "ok": "ठीक है",
@@ -88,4 +89,4 @@
       "openFolderFailed": "फ़ोल्डर खोलना विफल",
       "openFolderFailedDesc": "डाउनलोड फ़ोल्डर खोलने में विफल"
     }
-  }`r`n
+  }

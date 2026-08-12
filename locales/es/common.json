@@ -1,5 +1,6 @@
 {
   "appTitle": "AlterSendme",
+  "appSubtitle": "Transferencia cifrada directa · núcleo sendmer",
   "send": "Enviar",
   "receive": "Recibir",
   "ok": "OK",
@@ -88,4 +89,4 @@
     "openFolderFailed": "Error al abrir la carpeta",
     "openFolderFailedDesc": "No se pudo abrir la carpeta de descargas"
   }
-}`r`n
+}
