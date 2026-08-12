@@ -19,6 +19,7 @@ if (-not (Test-Path -LiteralPath $executable)) {
 
 $iscc = @(
     (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source,
+    (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
     (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
     (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1

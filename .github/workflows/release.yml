@@ -34,6 +34,8 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup --no-progress --yes
+      - name: Compile release executable
+        run: cargo build --locked --release
       - name: Build release assets
         shell: pwsh
         run: |

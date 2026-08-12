@@ -164,6 +164,8 @@ pub struct AlterSendmeApp {
     history_open: bool,
     preferences: Preferences,
     diagnostics: Option<String>,
+    receiver_help_open: bool,
+    completed_stopped: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -202,7 +204,7 @@ impl AlterSendmeApp {
             started_at,
             tab: Tab::Send,
             theme: load_theme(),
-            locale: Locale::English,
+            locale: load_locale(),
             send_phase: TransferPhase::Idle,
             receive_phase: TransferPhase::Idle,
             selected_path: None,
@@ -217,10 +219,7 @@ impl AlterSendmeApp {
             send_progress: Progress::default(),
             receive_progress: Progress::default(),
             receive_files: Vec::new(),
-            status: Locale::English
-                .lookup("ready")
-                .unwrap_or("Ready")
-                .to_owned(),
+            status: load_locale().lookup("ready").unwrap_or("Ready").to_owned(),
             error: None,
             completed_name: None,
             completed_path: None,
@@ -237,6 +236,8 @@ impl AlterSendmeApp {
             history_open: false,
             preferences: load_preferences(),
             diagnostics: None,
+            receiver_help_open: false,
+            completed_stopped: false,
         };
         let entity = cx.entity().downgrade();
         cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -329,6 +330,11 @@ impl AlterSendmeApp {
         } else {
             value
         }
+    }
+
+    /// Reports whether the sender completion card represents an interrupted transfer.
+    fn is_send_stopped(&self) -> bool {
+        self.completed_stopped
     }
 
     fn select_path(&mut self, path: PathBuf, cx: &mut Context<Self>) {
@@ -555,6 +561,25 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Advances through the bundled locale list and persists the selection for the next launch.
+    fn cycle_locale(&mut self, cx: &mut Context<Self>) {
+        let locales = Locale::all();
+        let index = locales
+            .iter()
+            .position(|locale| *locale == self.locale)
+            .unwrap_or(0);
+        self.locale = locales[(index + 1) % locales.len()];
+        persist_locale(self.locale);
+        self.status = self.text("ready");
+        cx.notify();
+    }
+
+    /// Toggles the receiver instructions without leaving the active transfer surface.
+    fn toggle_receiver_help(&mut self, cx: &mut Context<Self>) {
+        self.receiver_help_open = !self.receiver_help_open;
+        cx.notify();
+    }
+
     fn cycle_retry_limit(&mut self, cx: &mut Context<Self>) {
         self.preferences.retry_limit = match self.preferences.retry_limit {
             1 => 3,
@@ -685,12 +710,44 @@ impl AlterSendmeApp {
     }
 
     fn stop_sharing(&mut self, cx: &mut Context<Self>) {
+        // Snapshot transfer metadata before shutdown clears the live send result and ticket.
+        let was_transporting = self.send_phase == TransferPhase::Transporting;
+        let stopped_size = self.send_progress.processed;
+        let stopped_name = self
+            .selected_path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().to_string());
+        let stopped_path = self.selected_path.clone();
+        let stopped_duration = self
+            .transfer_started_at
+            .map(|started| started.elapsed())
+            .unwrap_or_default();
         self.generation += 1;
         let generation = self.generation;
         if let Some(abort) = self.send_abort.take() {
             abort.abort();
         }
         let Some(result) = self.send_result.take() else {
+            if was_transporting {
+                self.send_phase = TransferPhase::Completed;
+                self.completed_stopped = true;
+                self.completed_name = stopped_name;
+                self.completed_path = stopped_path.clone();
+                self.completed_size = stopped_size;
+                self.completed_duration = stopped_duration;
+                self.record_history(
+                    "sender",
+                    stopped_path.as_ref(),
+                    "stopped",
+                    Some(stopped_size),
+                );
+                self.ticket = None;
+                self.transfer_started_at = None;
+                self.status = self.status_text("stopped", "Transmission stopped");
+                cx.notify();
+                return;
+            }
             self.send_phase = TransferPhase::Idle;
             self.transfer_started_at = None;
             self.status = self.status_text("ready", "Ready");
@@ -711,10 +768,28 @@ impl AlterSendmeApp {
                 };
                 let _ = app.update(&mut cx, |app, cx| {
                     if app.generation == generation {
-                        app.send_phase = TransferPhase::Idle;
-                        app.ticket = None;
-                        app.transfer_started_at = None;
-                        app.status = app.status_text("ready", "Ready");
+                        if was_transporting {
+                            app.send_phase = TransferPhase::Completed;
+                            app.completed_stopped = true;
+                            app.completed_name = stopped_name;
+                            app.completed_path = stopped_path.clone();
+                            app.completed_size = stopped_size;
+                            app.completed_duration = stopped_duration;
+                            app.record_history(
+                                "sender",
+                                stopped_path.as_ref(),
+                                "stopped",
+                                Some(stopped_size),
+                            );
+                            app.ticket = None;
+                            app.transfer_started_at = None;
+                            app.status = app.status_text("stopped", "Transmission stopped");
+                        } else {
+                            app.send_phase = TransferPhase::Idle;
+                            app.ticket = None;
+                            app.transfer_started_at = None;
+                            app.status = app.status_text("ready", "Ready");
+                        }
                         if let Err(error) = outcome {
                             app.error = Some(error);
                         }
@@ -736,6 +811,7 @@ impl AlterSendmeApp {
 
     fn retry_send(&mut self, cx: &mut Context<Self>) {
         self.send_phase = TransferPhase::Idle;
+        self.completed_stopped = false;
         self.error = None;
         self.send_progress = Progress::default();
         self.start_sharing(cx);
@@ -743,6 +819,7 @@ impl AlterSendmeApp {
 
     fn retry_receive(&mut self, cx: &mut Context<Self>) {
         self.receive_phase = TransferPhase::Idle;
+        self.completed_stopped = false;
         self.error = None;
         self.receive_progress = Progress::default();
         self.start_receiving(cx);
@@ -825,6 +902,7 @@ impl AlterSendmeApp {
     ) {
         match result {
             Ok(result) => {
+                self.completed_stopped = false;
                 self.receive_phase = TransferPhase::Completed;
                 self.completed_name = result
                     .file_path
@@ -869,6 +947,10 @@ impl AlterSendmeApp {
             abort.abort();
         }
         self.receive_phase = TransferPhase::Idle;
+        self.ticket_input.clear();
+        self.ticket_selection = 0..0;
+        self.receive_progress = Progress::default();
+        self.receive_files.clear();
         self.transfer_started_at = None;
         self.status = self.status_text("ready", "Ready");
         cx.notify();
@@ -916,6 +998,9 @@ impl AlterSendmeApp {
         self.generation += 1;
         self.send_phase = TransferPhase::Idle;
         self.receive_phase = TransferPhase::Idle;
+        self.send_progress = Progress::default();
+        self.receive_progress = Progress::default();
+        self.receive_files.clear();
         self.selected_path = None;
         self.ticket = None;
         self.ticket_input.clear();
@@ -924,6 +1009,8 @@ impl AlterSendmeApp {
         self.completed_path = None;
         self.completed_size = 0;
         self.completed_duration = Duration::ZERO;
+        self.completed_stopped = false;
+        self.receiver_help_open = false;
         self.transfer_started_at = None;
         self.diagnostics = None;
         self.error = None;
@@ -1016,6 +1103,7 @@ impl AlterSendmeApp {
                 role: Role::Sender, ..
             } => {}
             TransferEvent::Completed { role: Role::Sender } => {
+                self.completed_stopped = false;
                 self.send_phase = TransferPhase::Completed;
                 self.completed_name = self
                     .selected_path
@@ -1041,6 +1129,7 @@ impl AlterSendmeApp {
             TransferEvent::Completed {
                 role: Role::Receiver,
             } => {
+                self.completed_stopped = false;
                 self.receive_phase = TransferPhase::Completed;
                 self.status = self.status_text("finalizing", "Finalizing download");
             }
@@ -1466,7 +1555,7 @@ impl AlterSendmeApp {
                         .child(self.button(
                             "choose-save",
                             self.text("browse"),
-                            true,
+                            self.receive_phase == TransferPhase::Idle,
                             colors,
                             cx,
                             |app, cx| app.choose_save_path(cx),
@@ -1493,6 +1582,32 @@ impl AlterSendmeApp {
                             |app, cx| app.start_receiving(cx),
                         )),
                 )
+                .child(self.button(
+                    "receiver-help",
+                    self.text("receiver.howToReceive"),
+                    true,
+                    colors,
+                    cx,
+                    |app, cx| app.toggle_receiver_help(cx),
+                ))
+                .when(self.receiver_help_open, |view| {
+                    view.child(
+                        div()
+                            .p_3()
+                            .rounded_md()
+                            .bg(colors.panel_alt)
+                            .text_xs()
+                            .text_color(colors.muted)
+                            .child(format!(
+                                "1. {}\n2. {}\n3. {}\n4. {}\n5. {}",
+                                self.text("receiver.instruction1"),
+                                self.text("receiver.instruction2"),
+                                self.text("receiver.instruction3"),
+                                self.text("receiver.instruction4"),
+                                self.text("receiver.instruction5")
+                            )),
+                    )
+                })
             })
             .when(receiving && !completed, |view| {
                 view.child(
@@ -1582,6 +1697,11 @@ impl Render for AlterSendmeApp {
             .on_key_down(cx.listener(|app, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "v" && event.keystroke.modifiers.platform {
                     app.paste_ticket(cx);
+                } else if event.keystroke.key == "enter"
+                    && app.tab == Tab::Receive
+                    && !event.keystroke.modifiers.shift
+                {
+                    app.start_receiving(cx);
                 }
             }))
             .child(
@@ -1671,214 +1791,215 @@ impl Render for AlterSendmeApp {
                                     .bg(colors.panel_alt)
                                     .text_sm()
                                     .cursor_pointer()
-                                    .on_click(cx.listener(|app, _, _, cx| {
-                                        let locales = Locale::all();
-                                        let index = locales
-                                            .iter()
-                                            .position(|locale| *locale == app.locale)
-                                            .unwrap_or(0);
-                                        app.locale = locales[(index + 1) % locales.len()];
-                                        cx.notify();
-                                    }))
+                                    .on_click(cx.listener(|app, _, _, cx| app.cycle_locale(cx)))
                                     .child(format!(
                                         "{}: {}",
                                         self.copy("language"),
                                         self.locale.label()
                                     )),
-                            )
-                            .child(self.button(
-                                "diagnostics",
-                                self.text("diagnostics.action"),
-                                true,
-                                colors,
-                                cx,
-                                |app, cx| app.run_diagnostics(cx),
-                            ))
-                            .child(self.button(
-                                "history",
-                                self.text("history.title"),
-                                true,
-                                colors,
-                                cx,
-                                |app, cx| app.show_history(cx),
-                            ))
-                            .child(self.button(
-                                "relay-mode",
-                                self.text("preferences.relay"),
-                                true,
-                                colors,
-                                cx,
-                                |app, cx| app.cycle_relay(cx),
-                            ))
-                            .child(self.button(
-                                "retry-limit",
-                                self.text("preferences.retry"),
-                                true,
-                                colors,
-                                cx,
-                                |app, cx| app.cycle_retry_limit(cx),
-                            ))
-                            .child(self.button(
-                                "download-chunk",
-                                self.text("preferences.chunk"),
-                                true,
-                                colors,
-                                cx,
-                                |app, cx| app.cycle_download_chunk(cx),
-                            )),
-                    )
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .flex_grow(1.0)
+                    .flex_shrink(1.0)
+                    .min_w(px(0.0))
+                    .min_h(px(0.0))
+                    .flex()
+                    .w_full()
+                    .id("content-scroll")
+                    .overflow_y_scroll()
+                    .p_6()
                     .child(
                         div()
-                            .flex_1()
+                            .w_full()
+                            .min_w(px(0.0))
+                            .min_h(px(0.0))
+                            .max_w(px(720.0))
+                            .mx_auto()
                             .flex()
-                            .justify_center()
-                            .id("content-scroll")
-                            .overflow_y_scroll()
-                            .p_6()
+                            .flex_col()
+                            .gap_4()
                             .child(
                                 div()
-                                    .w_full()
-                                    .max_w(px(720.0))
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap_2()
+                                    .child(self.button(
+                                        "diagnostics",
+                                        self.text("diagnostics.action"),
+                                        true,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.run_diagnostics(cx),
+                                    ))
+                                    .child(self.button(
+                                        "history",
+                                        self.text("history.title"),
+                                        true,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.show_history(cx),
+                                    ))
+                                    .child(self.button(
+                                        "relay-mode",
+                                        self.text("preferences.relay"),
+                                        true,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.cycle_relay(cx),
+                                    ))
+                                    .child(self.button(
+                                        "retry-limit",
+                                        self.text("preferences.retry"),
+                                        true,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.cycle_retry_limit(cx),
+                                    ))
+                                    .child(self.button(
+                                        "download-chunk",
+                                        self.text("preferences.chunk"),
+                                        true,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.cycle_download_chunk(cx),
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .p_1()
+                                    .rounded_md()
+                                    .bg(colors.panel_alt)
+                                    .child(self.tab_button(
+                                        Tab::Send,
+                                        self.copy("send"),
+                                        colors,
+                                        cx,
+                                    ))
+                                    .child(self.tab_button(
+                                        Tab::Receive,
+                                        self.copy("receive"),
+                                        colors,
+                                        cx,
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .min_w(px(0.0))
+                                    .min_h(px(0.0))
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(colors.border)
+                                    .bg(colors.panel)
+                                    .p_6()
                                     .flex()
                                     .flex_col()
                                     .gap_4()
+                                    .when(self.tab == Tab::Send, |view| {
+                                        view.child(self.render_send(colors, cx))
+                                    })
+                                    .when(self.tab == Tab::Receive, |view| {
+                                        view.child(self.render_receive(colors, cx))
+                                    })
+                                    .when(self.error.is_some(), |view| {
+                                        view.child(
+                                            div()
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(colors.danger)
+                                                .bg(colors.danger.alpha(0.12))
+                                                .p_3()
+                                                .text_sm()
+                                                .text_color(colors.danger)
+                                                .child(self.error.clone().unwrap_or_default()),
+                                        )
+                                    })
+                                    .when(self.history_open, |view| {
+                                        view.child(history_panel(self, colors, cx))
+                                    })
                                     .child(
                                         div()
-                                            .flex()
-                                            .gap_2()
-                                            .p_1()
-                                            .rounded_md()
-                                            .bg(colors.panel_alt)
-                                            .child(self.tab_button(
-                                                Tab::Send,
-                                                self.copy("send"),
-                                                colors,
-                                                cx,
-                                            ))
-                                            .child(self.tab_button(
-                                                Tab::Receive,
-                                                self.copy("receive"),
-                                                colors,
-                                                cx,
-                                            )),
+                                            .text_sm()
+                                            .text_color(colors.muted)
+                                            .child(self.status.clone()),
                                     )
-                                    .child(
-                                        div()
-                                            .rounded_md()
-                                            .border_1()
-                                            .border_color(colors.border)
-                                            .bg(colors.panel)
-                                            .p_6()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_4()
-                                            .when(self.tab == Tab::Send, |view| {
-                                                view.child(self.render_send(colors, cx))
-                                            })
-                                            .when(self.tab == Tab::Receive, |view| {
-                                                view.child(self.render_receive(colors, cx))
-                                            })
-                                            .when(self.error.is_some(), |view| {
-                                                view.child(
-                                                    div()
-                                                        .rounded_md()
-                                                        .border_1()
-                                                        .border_color(colors.danger)
-                                                        .bg(colors.danger.alpha(0.12))
-                                                        .p_3()
-                                                        .text_sm()
-                                                        .text_color(colors.danger)
-                                                        .child(
-                                                            self.error.clone().unwrap_or_default(),
-                                                        ),
-                                                )
-                                            })
-                                            .when(self.history_open, |view| {
-                                                view.child(history_panel(self, colors, cx))
-                                            })
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(colors.muted)
-                                                    .child(self.status.clone()),
-                                            )
-                                            .when(self.diagnostics.is_some(), |view| {
-                                                view.child(
-                                                    div().text_xs().text_color(colors.muted).child(
-                                                        self.diagnostics
-                                                            .clone()
-                                                            .unwrap_or_default(),
-                                                    ),
-                                                )
-                                            }),
-                                    ),
+                                    .when(self.diagnostics.is_some(), |view| {
+                                        view.child(
+                                            div().text_xs().text_color(colors.muted).child(
+                                                self.diagnostics.clone().unwrap_or_default(),
+                                            ),
+                                        )
+                                    }),
                             ),
+                    ),
+            )
+            .child(
+                div()
+                    .h(px(46.0))
+                    .px_6()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .border_t_1()
+                    .border_color(colors.border)
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(self.text("appSubtitle"))
+                    .child(
+                        div()
+                            .flex_1()
+                            .px_3()
+                            .text_center()
+                            .truncate()
+                            .child(self.update_status.clone().unwrap_or_default()),
                     )
                     .child(
                         div()
-                            .h(px(46.0))
-                            .px_6()
                             .flex()
-                            .items_center()
-                            .justify_between()
-                            .border_t_1()
-                            .border_color(colors.border)
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .child(self.text("appSubtitle"))
+                            .gap_3()
                             .child(
                                 div()
-                                    .flex_1()
-                                    .px_3()
-                                    .text_center()
-                                    .truncate()
-                                    .child(self.update_status.clone().unwrap_or_default()),
+                                    .id("footer-new")
+                                    .role(A11yRole::Button)
+                                    .aria_label(self.copy("new"))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|app, _, _, cx| app.new_transfer(cx)))
+                                    .child(self.copy("new")),
                             )
                             .child(
                                 div()
-                                    .flex()
-                                    .gap_3()
-                                    .child(
-                                        div()
-                                            .id("footer-new")
-                                            .role(A11yRole::Button)
-                                            .aria_label(self.copy("new"))
-                                            .cursor_pointer()
-                                            .on_click(
-                                                cx.listener(|app, _, _, cx| app.new_transfer(cx)),
-                                            )
-                                            .child(self.copy("new")),
+                                    .id("footer-sponsor")
+                                    .role(A11yRole::Button)
+                                    .aria_label(self.text("donate"))
+                                    .cursor_pointer()
+                                    .on_click(
+                                        cx.listener(|app, _, _, cx| app.open_sponsor_page(cx)),
                                     )
-                                    .child(
-                                        div()
-                                            .id("footer-sponsor")
-                                            .role(A11yRole::Button)
-                                            .aria_label(self.text("donate"))
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|app, _, _, cx| {
-                                                app.open_sponsor_page(cx)
-                                            }))
-                                            .child(self.text("donate")),
+                                    .child(self.text("donate")),
+                            )
+                            .child(
+                                div()
+                                    .id("footer-update")
+                                    .role(A11yRole::Button)
+                                    .aria_label(self.text("update.checkNow"))
+                                    .cursor_pointer()
+                                    .on_click(
+                                        cx.listener(|app, _, _, cx| app.open_update_or_check(cx)),
                                     )
-                                    .child(
-                                        div()
-                                            .id("footer-update")
-                                            .role(A11yRole::Button)
-                                            .aria_label(self.text("update.checkNow"))
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|app, _, _, cx| {
-                                                app.open_update_or_check(cx)
-                                            }))
-                                            .child(if self.update_checking {
-                                                self.text("update.checking")
-                                            } else if self.update_info.is_some() {
-                                                self.text("update.found")
-                                            } else {
-                                                self.text("update.checkNow")
-                                            }),
-                                    )
-                                    .child(div().child(format!("v{}", env!("CARGO_PKG_VERSION")))),
-                            ),
+                                    .child(if self.update_checking {
+                                        self.text("update.checking")
+                                    } else if self.update_info.is_some() {
+                                        self.text("update.found")
+                                    } else {
+                                        self.text("update.checkNow")
+                                    }),
+                            )
+                            .child(div().child(format!("v{}", env!("CARGO_PKG_VERSION")))),
                     ),
             )
     }
@@ -2061,7 +2182,7 @@ fn current_platform_key() -> &'static str {
 
 fn current_asset_suffix() -> &'static str {
     if cfg!(target_os = "windows") {
-        "x64-setup.exe"
+        "-windows-setup.exe"
     } else if cfg!(target_os = "macos") {
         ".dmg"
     } else {
@@ -2087,7 +2208,7 @@ fn is_newer_version(current: &str, candidate: &str) -> bool {
 
 #[cfg(test)]
 mod update_tests {
-    use super::is_newer_version;
+    use super::{current_asset_suffix, is_newer_version};
 
     #[test]
     fn compares_semver_like_versions() {
@@ -2096,6 +2217,12 @@ mod update_tests {
         assert!(!is_newer_version("0.2.0", "0.2.0"));
         assert!(!is_newer_version("0.2.0", "0.1.99"));
         assert!(is_newer_version("v0.2.0", "v0.3.0"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn selects_the_windows_installer_published_by_release_workflow() {
+        assert_eq!(current_asset_suffix(), "-windows-setup.exe");
     }
 }
 
@@ -2157,7 +2284,11 @@ fn completion_card(
                 .text_lg()
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(colors.accent)
-                .child(app.text("transfer_complete")),
+                .child(if app.is_send_stopped() {
+                    app.text("transfer.stopped")
+                } else {
+                    app.text("transfer.complete")
+                }),
         )
         .child(
             div().text_sm().child(
@@ -2166,11 +2297,20 @@ fn completion_card(
                     .unwrap_or_else(|| app.text("transfer.file")),
             ),
         )
-        .child(div().text_sm().text_color(colors.muted).child(format!(
-            "{} bytes - {:.1}s",
-            app.completed_size,
-            app.completed_duration.as_secs_f32()
-        )))
+        .child(
+            div()
+                .text_sm()
+                .text_color(colors.muted)
+                .child(if app.is_send_stopped() {
+                    app.text("transfer.wasStopped")
+                } else {
+                    format!(
+                        "{} bytes - {:.1}s",
+                        app.completed_size,
+                        app.completed_duration.as_secs_f32()
+                    )
+                }),
+        )
         .child(app.button(
             "receive-reveal",
             app.text("open_folder"),
@@ -2317,6 +2457,48 @@ fn theme_path() -> PathBuf {
     directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
         .map(|dirs| dirs.config_dir().join("theme"))
         .unwrap_or_else(|| PathBuf::from("alter-sendme-theme"))
+}
+
+fn locale_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.config_dir().join("locale"))
+        .unwrap_or_else(|| PathBuf::from("alter-sendme-locale"))
+}
+
+/// Loads a previously selected locale while falling back to English for invalid or missing data.
+fn load_locale() -> Locale {
+    match fs::read_to_string(locale_path()).ok().as_deref() {
+        Some("ar") => Locale::Arabic,
+        Some("cs") => Locale::Czech,
+        Some("de") => Locale::German,
+        Some("es") => Locale::Spanish,
+        Some("fa") => Locale::Persian,
+        Some("fr") => Locale::French,
+        Some("hi") => Locale::Hindi,
+        Some("it") => Locale::Italian,
+        Some("ja") => Locale::Japanese,
+        Some("ko") => Locale::Korean,
+        Some("no") => Locale::Norwegian,
+        Some("pl") => Locale::Polish,
+        Some("pt-BR") => Locale::BrazilianPortuguese,
+        Some("ru") => Locale::Russian,
+        Some("sr") => Locale::Serbian,
+        Some("th") => Locale::Thai,
+        Some("tr") => Locale::Turkish,
+        Some("uk") => Locale::Ukrainian,
+        Some("zh-CN") => Locale::SimplifiedChinese,
+        Some("zh-TW") => Locale::TraditionalChinese,
+        _ => Locale::English,
+    }
+}
+
+/// Stores the locale code in the platform configuration directory for future launches.
+fn persist_locale(locale: Locale) {
+    let path = locale_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, locale.code());
 }
 
 fn preferences_path() -> PathBuf {
