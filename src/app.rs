@@ -51,6 +51,20 @@ enum TransferPhase {
 }
 
 impl TransferPhase {
+    /// Maps the internal lifecycle to the product language used by the sender/receiver cards.
+    fn product_state(self) -> &'static str {
+        match self {
+            Self::Idle => "Idle",
+            Self::Preparing => "Preparing",
+            Self::Sharing => "Listening",
+            Self::Connecting => "Preparing",
+            Self::Transporting => "Active",
+            Self::Stopping => "Stopping",
+            Self::Completed => "Completed",
+            Self::Failed => "Failed",
+        }
+    }
+
     fn is_active(self) -> bool {
         matches!(
             self,
@@ -538,6 +552,34 @@ impl AlterSendmeApp {
             "{}: {}",
             self.text("preferences.relay"),
             self.preferences.relay
+        );
+        cx.notify();
+    }
+
+    fn cycle_retry_limit(&mut self, cx: &mut Context<Self>) {
+        self.preferences.retry_limit = match self.preferences.retry_limit {
+            1 => 3,
+            3 => 5,
+            _ => 1,
+        };
+        self.status = format!(
+            "{}: {}",
+            self.text("preferences.retry"),
+            self.preferences.retry_limit
+        );
+        cx.notify();
+    }
+
+    fn cycle_download_chunk(&mut self, cx: &mut Context<Self>) {
+        self.preferences.download_limit_mb = match self.preferences.download_limit_mb {
+            8 => 32,
+            32 => 64,
+            _ => 8,
+        };
+        self.status = format!(
+            "{}: {} MB",
+            self.text("preferences.chunk"),
+            self.preferences.download_limit_mb
         );
         cx.notify();
     }
@@ -1132,6 +1174,12 @@ impl AlterSendmeApp {
                     .text_color(colors.muted)
                     .child(self.text("sender.subtitle")),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(format!("State: {}", self.send_phase.product_state())),
+            )
             .when(self.selected_path.is_some(), |view| {
                 view.child(
                     div()
@@ -1343,6 +1391,12 @@ impl AlterSendmeApp {
                     .text_sm()
                     .text_color(colors.muted)
                     .child(self.text("receiver.subtitle")),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(colors.muted)
+                    .child(format!("State: {}", self.receive_phase.product_state())),
             )
             .when(!receiving, |view| {
                 view.child(
@@ -1618,6 +1672,22 @@ impl Render for AlterSendmeApp {
                                 colors,
                                 cx,
                                 |app, cx| app.cycle_relay(cx),
+                            ))
+                            .child(self.button(
+                                "retry-limit",
+                                self.text("preferences.retry"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.cycle_retry_limit(cx),
+                            ))
+                            .child(self.button(
+                                "download-chunk",
+                                self.text("preferences.chunk"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.cycle_download_chunk(cx),
                             )),
                     )
                     .child(

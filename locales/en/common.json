@@ -109,7 +109,9 @@
     "cleared": "Transfer history cleared"
   },
   "preferences": {
-    "relay": "Relay mode"
+    "relay": "Relay mode",
+    "retry": "Retry limit",
+    "chunk": "Download chunk"
   },
   "errors": {
     "sharingFailed": "Sharing Failed",
