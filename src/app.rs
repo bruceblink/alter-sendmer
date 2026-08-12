@@ -755,7 +755,7 @@ impl AlterSendmeApp {
             cx.notify();
             return;
         }
-        if ticket.parse::<iroh_blobs::ticket::BlobTicket>().is_err() {
+        if !ticket_is_valid(&ticket) {
             self.error = Some(self.text("receiver.invalidTicket"));
             self.receive_phase = TransferPhase::Failed;
             cx.notify();
@@ -2327,9 +2327,13 @@ fn unix_timestamp() -> u64 {
         .unwrap_or_default()
 }
 
+fn ticket_is_valid(ticket: &str) -> bool {
+    ticket.parse::<iroh_blobs::ticket::BlobTicket>().is_ok()
+}
+
 #[cfg(test)]
 mod history_tests {
-    use super::{HistoryEntry, Progress, TransferPhase};
+    use super::{HistoryEntry, Progress, TransferPhase, ticket_is_valid};
 
     #[test]
     fn phase_model_exposes_idle_active_completion_and_failure() {
@@ -2369,6 +2373,12 @@ mod history_tests {
         let encoded = serde_json::to_string(&entry).expect("history serializes");
         let decoded: HistoryEntry = serde_json::from_str(&encoded).expect("history parses");
         assert_eq!(decoded, entry);
+    }
+
+    #[test]
+    fn receiver_rejects_empty_or_malformed_ticket() {
+        assert!(!ticket_is_valid(""));
+        assert!(!ticket_is_valid("sendme receive ticket"));
     }
 }
 
