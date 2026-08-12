@@ -54,18 +54,18 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         };
         if let Err(error) = cx.open_window(options, move |window, cx| {
             let app = cx.new(|cx| app::AlterSendmeApp::new(started_at, window, cx));
-            app.update(cx, |_, cx| {
-                cx.on_app_quit(|app, _| {
-                    let send_result = app.take_shutdown_resources();
-                    async move {
-                        if let Some(result) = send_result {
-                            let _ = tokio::time::timeout(Duration::from_secs(2), result.shutdown())
-                                .await;
-                        }
+            // Keep the entity alive until the app-level quit hook has drained transfer resources.
+            let app_for_quit = app.clone();
+            cx.on_app_quit(move |cx| {
+                let send_result = app_for_quit.update(cx, |app, _| app.take_shutdown_resources());
+                async move {
+                    if let Some(result) = send_result {
+                        let _ =
+                            tokio::time::timeout(Duration::from_secs(2), result.shutdown()).await;
                     }
-                })
-                .detach();
-            });
+                }
+            })
+            .detach();
             app
         }) {
             log::error!("failed to open AlterSendme window: {error}");
