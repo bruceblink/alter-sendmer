@@ -1039,6 +1039,7 @@ impl AlterSendmeApp {
                 let _ = result.shutdown().await;
             });
         }
+        self.send_abort = None;
         self.generation += 1;
         self.send_phase = TransferPhase::Idle;
         self.receive_phase = TransferPhase::Idle;
