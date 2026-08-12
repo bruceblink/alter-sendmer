@@ -51,20 +51,6 @@ enum TransferPhase {
 }
 
 impl TransferPhase {
-    /// Maps the internal lifecycle to the product language used by the sender/receiver cards.
-    fn product_state(self) -> &'static str {
-        match self {
-            Self::Idle => "Idle",
-            Self::Preparing => "Preparing",
-            Self::Sharing => "Listening",
-            Self::Connecting => "Preparing",
-            Self::Transporting => "Active",
-            Self::Stopping => "Stopping",
-            Self::Completed => "Completed",
-            Self::Failed => "Failed",
-        }
-    }
-
     fn is_active(self) -> bool {
         matches!(
             self,
@@ -75,6 +61,24 @@ impl TransferPhase {
                 | Self::Stopping
         )
     }
+}
+
+fn state_label(phase: TransferPhase, locale: Locale) -> String {
+    let key = match phase {
+        TransferPhase::Idle => "state.idle",
+        TransferPhase::Preparing => "state.preparing",
+        TransferPhase::Sharing => "state.listening",
+        TransferPhase::Connecting => "state.preparing",
+        TransferPhase::Transporting => "state.active",
+        TransferPhase::Stopping => "state.stopping",
+        TransferPhase::Completed => "state.completed",
+        TransferPhase::Failed => "state.failed",
+    };
+    locale
+        .lookup(key)
+        .or_else(|| Locale::English.lookup(key))
+        .unwrap_or(key)
+        .to_owned()
 }
 
 #[derive(Clone, Debug, Default)]
@@ -116,8 +120,7 @@ struct HistoryEntry {
     ticket: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
-#[allow(dead_code)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct Preferences {
     relay: String,
     retry_limit: u32,
@@ -232,11 +235,7 @@ impl AlterSendmeApp {
             update_status: None,
             history: load_history(),
             history_open: false,
-            preferences: Preferences {
-                relay: "default".to_owned(),
-                retry_limit: 3,
-                download_limit_mb: 32,
-            },
+            preferences: load_preferences(),
             diagnostics: None,
         };
         let entity = cx.entity().downgrade();
@@ -548,11 +547,11 @@ impl AlterSendmeApp {
         } else {
             "default".to_owned()
         };
-        self.status = format!(
-            "{}: {}",
-            self.text("preferences.relay"),
-            self.preferences.relay
-        );
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.relay"))
+            .replace("{{value}}", &self.preferences.relay);
         cx.notify();
     }
 
@@ -562,11 +561,11 @@ impl AlterSendmeApp {
             3 => 5,
             _ => 1,
         };
-        self.status = format!(
-            "{}: {}",
-            self.text("preferences.retry"),
-            self.preferences.retry_limit
-        );
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.retry"))
+            .replace("{{value}}", &self.preferences.retry_limit.to_string());
         cx.notify();
     }
 
@@ -576,20 +575,31 @@ impl AlterSendmeApp {
             32 => 64,
             _ => 8,
         };
-        self.status = format!(
-            "{}: {} MB",
-            self.text("preferences.chunk"),
-            self.preferences.download_limit_mb
-        );
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.chunk"))
+            .replace(
+                "{{value}}",
+                &format!("{} MB", self.preferences.download_limit_mb),
+            );
         cx.notify();
     }
 
-    fn record_history(&mut self, role: &str, path: Option<&PathBuf>, outcome: &str) {
+    /// Records one finished or failed transfer while avoiding ticket/file contents beyond the
+    /// sender ticket that is needed for history replay.
+    fn record_history(
+        &mut self,
+        role: &str,
+        path: Option<&PathBuf>,
+        outcome: &str,
+        size_override: Option<u64>,
+    ) {
         let duration = self
             .transfer_started_at
             .map(|started| started.elapsed())
             .unwrap_or_default();
-        let size = path.map(path_size).unwrap_or(0);
+        let size = size_override.unwrap_or_else(|| path.map(path_size).unwrap_or(0));
         let speed = if duration.is_zero() {
             0
         } else {
@@ -827,12 +837,24 @@ impl AlterSendmeApp {
                     .unwrap_or(self.started_at)
                     .elapsed();
                 let path = Some(result.file_path.clone());
-                self.record_history("receiver", path.as_ref(), "completed");
+                self.record_history(
+                    "receiver",
+                    path.as_ref(),
+                    "completed",
+                    Some(self.receive_progress.total.max(self.completed_size)),
+                );
                 self.transfer_started_at = None;
                 self.status = self.status_text("download_completed", "Download completed");
             }
             Err(error) => {
                 self.receive_phase = TransferPhase::Failed;
+                let path = self.completed_path.clone();
+                self.record_history(
+                    "receiver",
+                    path.as_ref(),
+                    "failed",
+                    Some(self.receive_progress.processed),
+                );
                 self.transfer_started_at = None;
                 self.error = Some(error);
                 self.status = self.status_text("receive_failed", "Receive failed");
@@ -1009,7 +1031,12 @@ impl AlterSendmeApp {
                 self.transfer_started_at = None;
                 self.status = self.status_text("transfer_completed", "Transfer completed");
                 let path = self.selected_path.clone();
-                self.record_history("sender", path.as_ref(), "completed");
+                self.record_history(
+                    "sender",
+                    path.as_ref(),
+                    "completed",
+                    Some(self.send_progress.total),
+                );
             }
             TransferEvent::Completed {
                 role: Role::Receiver,
@@ -1023,12 +1050,22 @@ impl AlterSendmeApp {
                     Role::Sender => {
                         self.send_phase = TransferPhase::Failed;
                         let path = self.selected_path.clone();
-                        self.record_history("sender", path.as_ref(), "failed");
+                        self.record_history(
+                            "sender",
+                            path.as_ref(),
+                            "failed",
+                            Some(self.send_progress.processed),
+                        );
                     }
                     Role::Receiver => {
                         self.receive_phase = TransferPhase::Failed;
                         let path = self.completed_path.clone();
-                        self.record_history("receiver", path.as_ref(), "failed");
+                        self.record_history(
+                            "receiver",
+                            path.as_ref(),
+                            "failed",
+                            Some(self.receive_progress.processed),
+                        );
                     }
                 }
                 self.transfer_started_at = None;
@@ -1175,10 +1212,10 @@ impl AlterSendmeApp {
                     .child(self.text("sender.subtitle")),
             )
             .child(
-                div()
-                    .text_xs()
-                    .text_color(colors.muted)
-                    .child(format!("State: {}", self.send_phase.product_state())),
+                div().text_xs().text_color(colors.muted).child(
+                    self.text("state.label")
+                        .replace("{{value}}", &state_label(self.send_phase, self.locale)),
+                ),
             )
             .when(self.selected_path.is_some(), |view| {
                 view.child(
@@ -1393,10 +1430,10 @@ impl AlterSendmeApp {
                     .child(self.text("receiver.subtitle")),
             )
             .child(
-                div()
-                    .text_xs()
-                    .text_color(colors.muted)
-                    .child(format!("State: {}", self.receive_phase.product_state())),
+                div().text_xs().text_color(colors.muted).child(
+                    self.text("state.label")
+                        .replace("{{value}}", &state_label(self.receive_phase, self.locale)),
+                ),
             )
             .when(!receiving, |view| {
                 view.child(
@@ -2280,6 +2317,37 @@ fn theme_path() -> PathBuf {
     directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
         .map(|dirs| dirs.config_dir().join("theme"))
         .unwrap_or_else(|| PathBuf::from("alter-sendme-theme"))
+}
+
+fn preferences_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.config_dir().join("preferences.json"))
+        .unwrap_or_else(|| PathBuf::from("alter-sendme-preferences.json"))
+}
+
+fn default_preferences() -> Preferences {
+    Preferences {
+        relay: "default".to_owned(),
+        retry_limit: 3,
+        download_limit_mb: 32,
+    }
+}
+
+fn load_preferences() -> Preferences {
+    fs::read_to_string(preferences_path())
+        .ok()
+        .and_then(|contents| serde_json::from_str(&contents).ok())
+        .unwrap_or_else(default_preferences)
+}
+
+fn persist_preferences(preferences: &Preferences) {
+    let path = preferences_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(contents) = serde_json::to_string_pretty(preferences) {
+        let _ = fs::write(path, contents);
+    }
 }
 
 fn load_theme() -> Theme {

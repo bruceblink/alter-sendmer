@@ -111,7 +111,18 @@
   "preferences": {
     "relay": "Relay mode",
     "retry": "Retry limit",
-    "chunk": "Download chunk"
+    "chunk": "Download chunk",
+    "value": "{{name}}: {{value}}"
+  },
+  "state": {
+    "label": "State: {{value}}",
+    "idle": "Idle",
+    "preparing": "Preparing",
+    "listening": "Listening",
+    "active": "Active",
+    "stopping": "Stopping",
+    "completed": "Completed",
+    "failed": "Failed"
   },
   "errors": {
     "sharingFailed": "Sharing Failed",

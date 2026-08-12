@@ -39,12 +39,27 @@ fn main() {
     let mut files = walk_json_files(&locale_dir);
     files.sort_by(|left, right| left.0.cmp(&right.0));
 
+    // English is the canonical fallback. Merge its keys into every generated
+    // locale so the binary always has a complete user-facing catalog.
+    let english_entries = files
+        .iter()
+        .find(|(locale, _)| locale == "en")
+        .map(|(_, path)| read_entries(path))
+        .unwrap_or_default();
+
     for (locale, path) in files {
         println!("cargo:rerun-if-changed={}", path.display());
-        let contents = fs::read_to_string(&path).expect("read locale file");
-        let value: Value = serde_json::from_str(&contents).expect("parse locale file");
-        let mut entries = Vec::new();
-        flatten(&value, "", &mut entries);
+        let mut entries = read_entries(&path);
+        let known = entries
+            .iter()
+            .map(|(key, _)| key.clone())
+            .collect::<std::collections::HashSet<_>>();
+        entries.extend(
+            english_entries
+                .iter()
+                .filter(|(key, _)| !known.contains(key))
+                .cloned(),
+        );
         entries.sort_by(|left, right| left.0.cmp(&right.0));
 
         output.push_str(&format!("        {locale:?} => match key {{\n"));
@@ -56,6 +71,14 @@ fn main() {
 
     output.push_str("        _ => None,\n    }\n}\n");
     fs::write(output_path, output).expect("write generated locale table");
+}
+
+fn read_entries(path: &Path) -> Vec<(String, String)> {
+    let contents = fs::read_to_string(path).expect("read locale file");
+    let value: Value = serde_json::from_str(&contents).expect("parse locale file");
+    let mut entries = Vec::new();
+    flatten(&value, "", &mut entries);
+    entries
 }
 
 fn walk_json_files(locale_dir: &Path) -> Vec<(String, PathBuf)> {

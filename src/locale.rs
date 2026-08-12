@@ -176,4 +176,26 @@ mod tests {
             Some("打开文件夹")
         );
     }
+
+    #[test]
+    fn every_locale_has_the_complete_english_fallback_catalog() {
+        let required = [
+            "diagnostics.action",
+            "history.title",
+            "history.clear",
+            "preferences.relay",
+            "sender.saveTicket",
+            "receiver.invalidTicket",
+            "transfer.tryAgain",
+        ];
+        for locale in Locale::all() {
+            for key in required {
+                assert!(
+                    locale.lookup(key).is_some(),
+                    "locale {} is missing {key}",
+                    locale.code()
+                );
+            }
+        }
+    }
 }
