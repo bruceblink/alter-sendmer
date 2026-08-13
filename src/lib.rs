@@ -15,9 +15,9 @@ struct AppAssets;
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> anyhow::Result<Option<Cow<'static, [u8]>>> {
         match path {
-            "alter-sendme-mark.svg" => Ok(Some(Cow::Borrowed(include_bytes!(
-                "../assets/alter-sendme-mark.svg"
-            )))),
+            "alter-sendme-mark.svg" | "assets/alter-sendme-mark.svg" => Ok(Some(Cow::Borrowed(
+                include_bytes!("../assets/alter-sendme-mark.svg"),
+            ))),
             _ => Ok(None),
         }
     }

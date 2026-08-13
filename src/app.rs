@@ -824,9 +824,20 @@ impl AlterSendmeApp {
     }
 
     fn retry_send(&mut self, cx: &mut Context<Self>) {
+        // Failed sends retain their result until retry; release that router before starting a
+        // fresh generation so a retry never leaves two share sessions alive at once.
+        if let Some(abort) = self.send_abort.take() {
+            abort.abort();
+        }
+        if let Some(result) = self.send_result.take() {
+            tokio::spawn(async move {
+                let _ = result.shutdown().await;
+            });
+        }
         self.send_phase = TransferPhase::Idle;
         self.completed_stopped = false;
         self.error = None;
+        self.ticket = None;
         self.send_progress = Progress::default();
         self.start_sharing(cx);
     }
@@ -964,7 +975,10 @@ impl AlterSendmeApp {
             }
             Err(error) => {
                 self.receive_phase = TransferPhase::Failed;
-                let path = self.completed_path.clone();
+                let path = self
+                    .completed_path
+                    .clone()
+                    .or_else(|| Some(self.save_path.clone()));
                 self.record_history(
                     "receiver",
                     path.as_ref(),
@@ -1197,14 +1211,9 @@ impl AlterSendmeApp {
                         );
                     }
                     Role::Receiver => {
+                        // The receive task reports the terminal error below; recording here too
+                        // would duplicate one failed receive in history.
                         self.receive_phase = TransferPhase::Failed;
-                        let path = self.completed_path.clone();
-                        self.record_history(
-                            "receiver",
-                            path.as_ref(),
-                            "failed",
-                            Some(self.receive_progress.processed),
-                        );
                     }
                 }
                 self.transfer_started_at = None;
@@ -1789,7 +1798,12 @@ impl Render for AlterSendmeApp {
                                     .bg(colors.accent)
                                     .text_color(colors.background)
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child(svg().path("alter-sendme-mark.svg").size(px(22.0))),
+                                    .child(
+                                        svg()
+                                            .path("alter-sendme-mark.svg")
+                                            .size(px(22.0))
+                                            .text_color(colors.background),
+                                    ),
                             )
                             .child(
                                 div()
@@ -2940,5 +2954,13 @@ mod tests {
             TransferPhase::Failed,
             TransferPhase::Completed
         ));
+    }
+
+    #[test]
+    fn failed_receive_history_path_falls_back_to_save_directory() {
+        let save_path = PathBuf::from("C:/Users/test/Downloads");
+        let completed_path: Option<PathBuf> = None;
+        let path = completed_path.or_else(|| Some(save_path.clone()));
+        assert_eq!(path.as_deref(), Some(save_path.as_path()));
     }
 }
