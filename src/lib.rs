@@ -3,6 +3,7 @@
 mod app;
 mod locale;
 mod transfer;
+mod updater;
 
 use gpui::*;
 use std::{

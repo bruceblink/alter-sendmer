@@ -2,6 +2,7 @@
 
 use crate::locale::Locale;
 use crate::transfer;
+use crate::updater::{self, AvailableUpdate};
 use async_channel::{Receiver, Sender};
 use gpui::prelude::*;
 use gpui::{
@@ -19,11 +20,6 @@ use std::{
 };
 
 const MAX_TICKET_LEN: usize = 16_384;
-const UPDATE_MANIFEST_URL: &str =
-    "https://github.com/bruceblink/alter-sendmer/releases/latest/download/latest.json";
-const GITHUB_RELEASE_URL: &str =
-    "https://api.github.com/repos/bruceblink/alter-sendmer/releases/latest";
-const RELEASES_URL: &str = "https://github.com/bruceblink/alter-sendmer/releases/latest";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -161,7 +157,8 @@ pub struct AlterSendmeApp {
     ticket_focus: FocusHandle,
     generation: u64,
     update_checking: bool,
-    update_info: Option<UpdateInfo>,
+    update_installing: bool,
+    update_info: Option<AvailableUpdate>,
     update_status: Option<String>,
     history: Vec<HistoryEntry>,
     history_open: bool,
@@ -171,31 +168,6 @@ pub struct AlterSendmeApp {
     diagnostics: Option<String>,
     receiver_help_open: bool,
     completed_stopped: bool,
-}
-
-#[derive(Clone, Debug)]
-struct UpdateInfo {
-    version: String,
-    download_url: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateManifest {
-    version: String,
-    #[serde(default)]
-    platforms: serde_json::Map<String, serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GitHubRelease {
-    tag_name: String,
-    assets: Vec<GitHubAsset>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GitHubAsset {
-    name: String,
-    browser_download_url: String,
 }
 
 impl AlterSendmeApp {
@@ -240,6 +212,7 @@ impl AlterSendmeApp {
             ticket_focus: cx.focus_handle(),
             generation: 0,
             update_checking: false,
+            update_installing: false,
             update_info: None,
             update_status: None,
             history: load_history(),
@@ -258,6 +231,9 @@ impl AlterSendmeApp {
             async move { pump_events(entity, receiver, &mut cx).await }
         })
         .detach();
+        // Match the legacy client by checking quietly on startup. Only an available update is
+        // surfaced; offline and up-to-date startup checks stay out of the transfer workflow.
+        cx.defer_in(window, |app, _, cx| app.check_for_updates(false, cx));
         app
     }
 
@@ -444,19 +420,22 @@ impl AlterSendmeApp {
         }
     }
 
-    /// Checks the signed release manifest without blocking the GPUI event loop.
-    pub(crate) fn check_for_updates(&mut self, cx: &mut Context<Self>) {
-        if self.update_checking {
+    /// Checks the signed release manifest off the UI thread; quiet startup checks only report updates.
+    pub(crate) fn check_for_updates(&mut self, report_no_update: bool, cx: &mut Context<Self>) {
+        if self.update_checking || self.update_installing {
             return;
         }
         self.update_checking = true;
-        self.update_status = Some(self.text("update.checking"));
+        if report_no_update {
+            self.update_status = Some(self.text("update.checking"));
+        }
         cx.notify();
         let app = cx.entity().downgrade();
+        let check = cx.background_spawn(async { updater::check_for_update() });
         cx.spawn(move |_, cx: &mut AsyncApp| {
             let mut cx = cx.clone();
             async move {
-                let result = fetch_update().await;
+                let result = check.await;
                 let _ = app.update(&mut cx, |app, cx| {
                     app.update_checking = false;
                     match result {
@@ -469,12 +448,13 @@ impl AlterSendmeApp {
                         }
                         Ok(None) => {
                             app.update_info = None;
-                            app.update_status = Some(app.text("update.upToDate"));
+                            app.update_status =
+                                report_no_update.then(|| app.text("update.upToDate"));
                         }
                         Err(error) => {
                             app.update_info = None;
-                            app.update_status =
-                                Some(format!("{}: {error}", app.text("update.failed")));
+                            app.update_status = report_no_update
+                                .then(|| format!("{}: {error}", app.text("update.failed")));
                         }
                     }
                     cx.notify();
@@ -484,13 +464,39 @@ impl AlterSendmeApp {
         .detach();
     }
 
-    /// Opens the newest release asset after the manifest check finds a newer version.
+    /// Installs a verified update or starts an explicit update check when none is cached.
     fn open_update_or_check(&mut self, cx: &mut Context<Self>) {
-        if let Some(info) = &self.update_info {
-            cx.open_url(&info.download_url);
-            self.status = self.text("update.installed");
+        if self.update_installing || self.update_checking {
+            return;
+        }
+        if let Some(info) = self.update_info.clone() {
+            self.update_installing = true;
+            self.update_status = Some(self.text("update.downloading"));
+            let app = cx.entity().downgrade();
+            let install = cx.background_spawn(async move { updater::install_update(info) });
+            cx.spawn(move |_, cx: &mut AsyncApp| {
+                let mut cx = cx.clone();
+                async move {
+                    let result = install.await;
+                    let _ = app.update(&mut cx, |app, cx| {
+                        app.update_installing = false;
+                        match result {
+                            Ok(()) => {
+                                app.update_info = None;
+                                app.update_status = Some(app.text("update.installed"));
+                            }
+                            Err(error) => {
+                                app.update_status =
+                                    Some(format!("{}: {error}", app.text("update.failed")));
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            })
+            .detach();
         } else if !self.update_checking {
-            self.check_for_updates(cx);
+            self.check_for_updates(true, cx);
         }
         cx.notify();
     }
@@ -2210,7 +2216,9 @@ impl Render for AlterSendmeApp {
                                     .on_click(
                                         cx.listener(|app, _, _, cx| app.open_update_or_check(cx)),
                                     )
-                                    .child(if self.update_checking {
+                                    .child(if self.update_installing {
+                                        self.text("update.downloading")
+                                    } else if self.update_checking {
                                         self.text("update.checking")
                                     } else if self.update_info.is_some() {
                                         self.text("update.found")
@@ -2347,120 +2355,6 @@ fn progress_bar(progress: &Progress, colors: Palette) -> gpui::Div {
                 .rounded_md()
                 .bg(colors.accent_alt),
         )
-}
-
-async fn fetch_update() -> anyhow::Result<Option<UpdateInfo>> {
-    let client = reqwest::Client::new();
-    let manifest_response = client
-        .get(UPDATE_MANIFEST_URL)
-        .header("User-Agent", "AlterSendme-GPUI")
-        .send()
-        .await?;
-    let (version, download_url) = if manifest_response.status().is_success() {
-        let manifest = manifest_response.json::<UpdateManifest>().await?;
-        let platform = current_platform_key();
-        let download_url = manifest
-            .platforms
-            .get(platform)
-            .and_then(|value| value.get("url"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned)
-            .unwrap_or_else(|| RELEASES_URL.to_owned());
-        (manifest.version, download_url)
-    } else {
-        let release = client
-            .get(GITHUB_RELEASE_URL)
-            .header("User-Agent", "AlterSendme-GPUI")
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<GitHubRelease>()
-            .await?;
-        let version = release.tag_name.trim_start_matches('v').to_owned();
-        let suffix = current_asset_suffix();
-        let download_url = release
-            .assets
-            .iter()
-            .find(|asset| asset.name.contains(suffix))
-            .map(|asset| asset.browser_download_url.clone())
-            .unwrap_or_else(|| RELEASES_URL.to_owned());
-        (version, download_url)
-    };
-    if !is_newer_version(env!("CARGO_PKG_VERSION"), &version) {
-        return Ok(None);
-    }
-    Ok(Some(UpdateInfo {
-        version,
-        download_url,
-    }))
-}
-
-fn current_platform_key() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "windows-x86_64-nsis"
-    } else if cfg!(target_os = "macos") {
-        "darwin-universal"
-    } else {
-        "linux-x86_64"
-    }
-}
-
-fn current_asset_suffix() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "-windows-setup.exe"
-    } else if cfg!(target_os = "macos") {
-        ".dmg"
-    } else {
-        ".AppImage"
-    }
-}
-
-fn is_newer_version(current: &str, candidate: &str) -> bool {
-    let parse = |version: &str| {
-        let mut parts = [0_u64; 3];
-        for (index, part) in version
-            .trim_start_matches('v')
-            .split('.')
-            .take(3)
-            .enumerate()
-        {
-            parts[index] = part.parse().unwrap_or(0);
-        }
-        parts
-    };
-    parse(candidate) > parse(current)
-}
-
-#[cfg(test)]
-mod update_tests {
-    use super::{
-        GITHUB_RELEASE_URL, RELEASES_URL, UPDATE_MANIFEST_URL, current_asset_suffix,
-        current_platform_key, is_newer_version,
-    };
-
-    #[test]
-    fn compares_semver_like_versions() {
-        assert!(is_newer_version("0.2.0", "0.2.1"));
-        assert!(is_newer_version("0.2.0", "1.0.0"));
-        assert!(!is_newer_version("0.2.0", "0.2.0"));
-        assert!(!is_newer_version("0.2.0", "0.1.99"));
-        assert!(is_newer_version("v0.2.0", "v0.3.0"));
-    }
-
-    #[test]
-    fn update_endpoints_use_the_active_gpui_repository() {
-        for endpoint in [UPDATE_MANIFEST_URL, GITHUB_RELEASE_URL, RELEASES_URL] {
-            assert!(endpoint.contains("bruceblink/alter-sendmer"));
-            assert!(!endpoint.contains("bruceblink/alter-sendme/"));
-        }
-    }
-
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn selects_the_windows_installer_published_by_release_workflow() {
-        assert_eq!(current_asset_suffix(), "-windows-setup.exe");
-        assert_eq!(current_platform_key(), "windows-x86_64-nsis");
-    }
 }
 
 /// Returns whether an active transfer must keep the user on the current tab.

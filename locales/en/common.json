@@ -16,8 +16,9 @@
   "update": {
     "checkNow": "Check Update",
     "checking": "Checking...",
+    "downloading": "Downloading and verifying update...",
     "upToDate": "Already latest",
-    "found": "Updating to v{{version}}...",
+    "found": "Version v{{version}} is available",
     "installed": "Update installed, restart app to apply",
     "failed": "Update check failed"
   },

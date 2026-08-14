@@ -16,8 +16,9 @@
   "update": {
     "checkNow": "檢查更新",
     "checking": "檢查中...",
+    "downloading": "正在下載並驗證更新...",
     "upToDate": "已是最新版本",
-    "found": "正在更新至 v{{version}}...",
+    "found": "發現新版本 v{{version}}",
     "installed": "更新已安裝，重新啟動後生效",
     "failed": "檢查更新失敗"
   },
