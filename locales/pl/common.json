@@ -8,6 +8,13 @@
     "loading": "Ładowanie...",
     "browse": "Przeglądaj",
     "donate": "Wesprzyj",
+    "diagnostics": { "action": "Diagnostyka", "client": "Klient", "completed": "Diagnostyka jest gotowa" },
+    "update": { "checkNow": "Sprawdź aktualizacje", "checking": "Sprawdzanie...", "upToDate": "Masz najnowszą wersję", "found": "Dostępna jest wersja v{{version}}", "installed": "Aktualizacja zainstalowana, uruchom aplikację ponownie", "failed": "Sprawdzanie aktualizacji nie powiodło się" },
+    "theme": { "label": "Motyw", "system": "Systemowy", "dark": "Ciemny", "light": "Jasny", "switchHint": "Zmień motyw: {{theme}}" },
+    "language": { "label": "Język", "select": "Wybierz język" },
+    "history": { "title": "Historia transferów", "empty": "Brak transferów", "clear": "Wyczyść historię", "cleared": "Historia transferów została wyczyszczona" },
+    "preferences": { "title": "Ustawienia transferu", "relay": "Tryb relay", "retry": "Limit ponowień", "chunk": "Blok pobierania", "default": "Automatycznie", "disabled": "Tylko bezpośrednio", "value": "{{name}}: {{value}}" },
+    "state": { "label": "Stan: {{value}}", "idle": "Bezczynny", "preparing": "Przygotowanie", "listening": "Oczekiwanie na połączenie", "active": "Transfer", "stopping": "Zatrzymywanie", "completed": "Ukończono", "failed": "Niepowodzenie" },
     "sender": {
       "title": "Wyślij",
       "subtitle": "Udostępniaj pliki lub foldery przez zaszyfrowane połączenia peer-to-peer.",

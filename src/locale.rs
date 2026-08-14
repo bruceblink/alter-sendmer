@@ -178,6 +178,59 @@ mod tests {
     }
 
     #[test]
+    fn chinese_shell_navigation_does_not_fall_back_to_english() {
+        let required = [
+            "theme.label",
+            "language.label",
+            "language.select",
+            "diagnostics.action",
+            "history.title",
+            "preferences.title",
+            "preferences.relay",
+            "preferences.retry",
+            "preferences.chunk",
+            "state.label",
+        ];
+        for locale in [Locale::SimplifiedChinese, Locale::TraditionalChinese] {
+            for key in required {
+                let translated = locale.lookup(key).expect("Chinese shell key exists");
+                assert_ne!(translated, Locale::English.lookup(key).unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn every_non_english_locale_translates_the_navigation_shell() {
+        let required = [
+            "theme.label",
+            "language.label",
+            "language.select",
+            "diagnostics.action",
+            "history.title",
+            "preferences.title",
+            "preferences.relay",
+            "preferences.retry",
+            "preferences.chunk",
+            "state.label",
+        ];
+        for locale in Locale::all()
+            .iter()
+            .copied()
+            .filter(|locale| *locale != Locale::English)
+        {
+            for key in required {
+                let translated = locale.lookup(key).expect("localized shell key exists");
+                assert_ne!(
+                    translated,
+                    Locale::English.lookup(key).unwrap(),
+                    "locale {} still falls back for {key}",
+                    locale.code()
+                );
+            }
+        }
+    }
+
+    #[test]
     fn every_locale_has_the_complete_english_fallback_catalog() {
         let required = [
             "diagnostics.action",

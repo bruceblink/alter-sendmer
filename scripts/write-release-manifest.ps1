@@ -1,6 +1,6 @@
 param(
     [string]$Version = '',
-    [string]$Repository = 'bruceblink/alter-sendme',
+    [string]$Repository = 'bruceblink/alter-sendmer',
     [string]$OutputDirectory = ''
 )
 

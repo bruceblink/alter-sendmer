@@ -8,6 +8,13 @@
   "loading": "Caricamento...",
   "browse": "Sfoglia",
   "donate": "Dona",
+  "diagnostics": { "action": "Diagnostica", "client": "Client", "completed": "Diagnostica pronta" },
+  "update": { "checkNow": "Controlla aggiornamenti", "checking": "Controllo...", "upToDate": "Già aggiornato", "found": "È disponibile la versione v{{version}}", "installed": "Aggiornamento installato, riavvia l'app", "failed": "Controllo aggiornamenti non riuscito" },
+  "theme": { "label": "Tema", "system": "Sistema", "dark": "Scuro", "light": "Chiaro", "switchHint": "Cambia tema: {{theme}}" },
+  "language": { "label": "Lingua", "select": "Seleziona lingua" },
+  "history": { "title": "Cronologia trasferimenti", "empty": "Nessun trasferimento", "clear": "Cancella cronologia", "cleared": "Cronologia trasferimenti cancellata" },
+  "preferences": { "title": "Impostazioni trasferimento", "relay": "Modalità relay", "retry": "Limite tentativi", "chunk": "Blocco download", "default": "Automatico", "disabled": "Solo connessione diretta", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Stato: {{value}}", "idle": "Inattivo", "preparing": "Preparazione", "listening": "In attesa di connessione", "active": "Trasferimento", "stopping": "Arresto", "completed": "Completato", "failed": "Non riuscito" },
   "sender": {
     "title": "Invia",
     "subtitle": "Condividi file o cartelle tramite connessioni peer-to-peer cifrate.",

@@ -20,10 +20,10 @@ use std::{
 
 const MAX_TICKET_LEN: usize = 16_384;
 const UPDATE_MANIFEST_URL: &str =
-    "https://github.com/bruceblink/alter-sendme/releases/latest/download/latest.json";
+    "https://github.com/bruceblink/alter-sendmer/releases/latest/download/latest.json";
 const GITHUB_RELEASE_URL: &str =
-    "https://api.github.com/repos/bruceblink/alter-sendme/releases/latest";
-const RELEASES_URL: &str = "https://github.com/bruceblink/alter-sendme/releases/latest";
+    "https://api.github.com/repos/bruceblink/alter-sendmer/releases/latest";
+const RELEASES_URL: &str = "https://github.com/bruceblink/alter-sendmer/releases/latest";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -165,6 +165,7 @@ pub struct AlterSendmeApp {
     update_status: Option<String>,
     history: Vec<HistoryEntry>,
     history_open: bool,
+    preferences_open: bool,
     locale_menu_open: bool,
     preferences: Preferences,
     diagnostics: Option<String>,
@@ -243,6 +244,7 @@ impl AlterSendmeApp {
             update_status: None,
             history: load_history(),
             history_open: false,
+            preferences_open: false,
             locale_menu_open: false,
             preferences: load_preferences(),
             diagnostics: None,
@@ -322,6 +324,14 @@ impl AlterSendmeApp {
             Theme::System => self.text("theme.system"),
             Theme::Dark => self.text("theme.dark"),
             Theme::Light => self.text("theme.light"),
+        }
+    }
+
+    fn relay_label(&self) -> String {
+        if self.preferences.relay == "disabled" {
+            self.text("preferences.disabled")
+        } else {
+            self.text("preferences.default")
         }
     }
 
@@ -494,14 +504,22 @@ impl AlterSendmeApp {
 
     /// Shows a local diagnostic summary so support can identify the app, relay, and storage setup.
     fn run_diagnostics(&mut self, cx: &mut Context<Self>) {
-        self.diagnostics = Some(format!(
-            "{} {} | relay={} | history={} | sendmer=0.6",
-            self.text("diagnostics.client"),
-            env!("CARGO_PKG_VERSION"),
-            self.preferences.relay,
-            self.history.len()
-        ));
-        self.status = self.text("diagnostics.completed");
+        if self.diagnostics.is_some() {
+            self.diagnostics = None;
+        } else {
+            self.history_open = false;
+            self.preferences_open = false;
+            self.diagnostics = Some(format!(
+                "{} {} | {}={} | {}={} | sendmer=0.6",
+                self.text("diagnostics.client"),
+                env!("CARGO_PKG_VERSION"),
+                self.text("preferences.relay"),
+                self.relay_label(),
+                self.text("history.title"),
+                self.history.len()
+            ));
+            self.status = self.text("diagnostics.completed");
+        }
         cx.notify();
     }
 
@@ -551,6 +569,10 @@ impl AlterSendmeApp {
 
     fn show_history(&mut self, cx: &mut Context<Self>) {
         self.history_open = !self.history_open;
+        if self.history_open {
+            self.preferences_open = false;
+            self.diagnostics = None;
+        }
         self.status = if self.history.is_empty() {
             self.text("history.empty")
         } else {
@@ -559,9 +581,19 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Opens the grouped transfer preferences without mixing settings into the primary task tabs.
+    fn show_preferences(&mut self, cx: &mut Context<Self>) {
+        self.preferences_open = !self.preferences_open;
+        if self.preferences_open {
+            self.history_open = false;
+            self.diagnostics = None;
+        }
+        cx.notify();
+    }
+
     fn copy_history_ticket(&mut self, ticket: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ticket.into());
-        self.status = self.text("ticket_copied");
+        self.status = self.text("sender.ticketCopied");
         cx.notify();
     }
 
@@ -575,7 +607,7 @@ impl AlterSendmeApp {
         self.status = self
             .text("preferences.value")
             .replace("{{name}}", &self.text("preferences.relay"))
-            .replace("{{value}}", &self.preferences.relay);
+            .replace("{{value}}", &self.relay_label());
         cx.notify();
     }
 
@@ -1069,6 +1101,9 @@ impl AlterSendmeApp {
         self.completed_stopped = false;
         self.receiver_help_open = false;
         self.transfer_started_at = None;
+        self.history_open = false;
+        self.preferences_open = false;
+        self.locale_menu_open = false;
         self.diagnostics = None;
         self.error = None;
         self.status = self.status_text("ready", "Ready");
@@ -1320,6 +1355,85 @@ impl AlterSendmeApp {
                 button.on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
             })
             .child(label)
+    }
+
+    fn utility_button(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        label: String,
+        active: bool,
+        colors: Palette,
+        cx: &mut Context<Self>,
+        action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
+    ) -> gpui::Stateful<gpui::Div> {
+        div()
+            .id(id)
+            .focusable()
+            .tab_stop(true)
+            .role(A11yRole::Button)
+            .aria_label(label.clone())
+            .h(px(38.0))
+            .flex_1()
+            .min_w(px(150.0))
+            .px_3()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_md()
+            .border_1()
+            .border_color(if active { colors.accent } else { colors.border })
+            .bg(if active {
+                colors.accent.alpha(0.14)
+            } else {
+                colors.panel
+            })
+            .text_color(if active { colors.accent } else { colors.text })
+            .text_sm()
+            .font_weight(FontWeight::SEMIBOLD)
+            .cursor_pointer()
+            .hover(move |style| style.bg(colors.panel_alt))
+            .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
+            .child(label)
+    }
+
+    fn preference_button(
+        &self,
+        id: impl Into<gpui::ElementId>,
+        label: String,
+        value: String,
+        colors: Palette,
+        cx: &mut Context<Self>,
+        action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
+    ) -> gpui::Stateful<gpui::Div> {
+        div()
+            .id(id)
+            .focusable()
+            .tab_stop(true)
+            .role(A11yRole::Button)
+            .aria_label(format!("{label}: {value}"))
+            .h(px(56.0))
+            .flex_1()
+            .min_w(px(190.0))
+            .px_3()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .rounded_md()
+            .border_1()
+            .border_color(colors.border)
+            .bg(colors.panel)
+            .cursor_pointer()
+            .hover(move |style| style.border_color(colors.accent).bg(colors.panel_alt))
+            .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
+            .child(div().text_sm().text_color(colors.muted).child(label))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(colors.accent)
+                    .child(value),
+            )
     }
 
     fn render_send(&mut self, colors: Palette, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1755,6 +1869,7 @@ impl Render for AlterSendmeApp {
             .on_action(cx.listener(|_, _: &crate::Tab, window, cx| window.focus_next(cx)))
             .on_action(cx.listener(|_, _: &crate::TabPrev, window, cx| window.focus_prev(cx)))
             .size_full()
+            .relative()
             .flex()
             .flex_col()
             .bg(colors.background)
@@ -1835,7 +1950,7 @@ impl Render for AlterSendmeApp {
                                     .focusable()
                                     .tab_stop(true)
                                     .role(A11yRole::Button)
-                                    .aria_label(self.copy("theme"))
+                                    .aria_label(self.text("theme.label"))
                                     .px_3()
                                     .py_2()
                                     .rounded_md()
@@ -1853,100 +1968,39 @@ impl Render for AlterSendmeApp {
                                     }))
                                     .child(format!(
                                         "{}: {}",
-                                        self.copy("theme"),
+                                        self.text("theme.label"),
                                         self.theme_label()
                                     )),
                             )
                             .child(
                                 div()
-                                    .relative()
-                                    .child(
-                                        div()
-                                            .id("locale-toggle")
-                                            .focusable()
-                                            .tab_stop(true)
-                                            .role(A11yRole::ComboBox)
-                                            .aria_label(self.copy("language"))
-                                            .aria_expanded(self.locale_menu_open)
-                                            .px_3()
-                                            .py_2()
-                                            .rounded_md()
-                                            .bg(colors.panel_alt)
-                                            .text_sm()
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|app, _, _, cx| {
-                                                app.locale_menu_open = !app.locale_menu_open;
-                                                cx.notify();
-                                            }))
-                                            .child(format!(
-                                                "{}: {} v",
-                                                self.copy("language"),
-                                                self.locale.label()
-                                            )),
-                                    )
-                                    .when(self.locale_menu_open, |view| {
-                                        view.child(
-                                            div()
-                                                .id("locale-menu")
-                                                .absolute()
-                                                .top(px(42.0))
-                                                .right(px(0.0))
-                                                .w(px(220.0))
-                                                .max_h(px(420.0))
-                                                .overflow_y_scroll()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_1()
-                                                .p_2()
-                                                .rounded_md()
-                                                .border_1()
-                                                .border_color(colors.border)
-                                                .bg(colors.panel)
-                                                .text_sm()
-                                                .child(Locale::all().iter().fold(
-                                                    div().flex().flex_col().gap_1(),
-                                                    |menu, locale| {
-                                                        let selected = *locale == self.locale;
-                                                        let locale_value = *locale;
-                                                        menu.child(
-                                                            div()
-                                                                .id(format!(
-                                                                    "locale-option-{}",
-                                                                    locale.code()
-                                                                ))
-                                                                .focusable()
-                                                                .tab_stop(true)
-                                                                .role(A11yRole::ListBoxOption)
-                                                                .aria_label(locale.label())
-                                                                .aria_selected(selected)
-                                                                .px_2()
-                                                                .py_2()
-                                                                .rounded_md()
-                                                                .bg(if selected {
-                                                                    colors.accent
-                                                                } else {
-                                                                    colors.panel
-                                                                })
-                                                                .text_color(if selected {
-                                                                    colors.background
-                                                                } else {
-                                                                    colors.text
-                                                                })
-                                                                .cursor_pointer()
-                                                                .on_click(cx.listener(
-                                                                    move |app, _, _, cx| {
-                                                                        app.select_locale(
-                                                                            locale_value,
-                                                                            cx,
-                                                                        )
-                                                                    },
-                                                                ))
-                                                                .child(locale.label()),
-                                                        )
-                                                    },
-                                                )),
-                                        )
-                                    }),
+                                    .id("locale-toggle")
+                                    .focusable()
+                                    .tab_stop(true)
+                                    .role(A11yRole::ComboBox)
+                                    .aria_label(self.text("language.label"))
+                                    .aria_expanded(self.locale_menu_open)
+                                    .px_3()
+                                    .py_2()
+                                    .rounded_md()
+                                    .border_1()
+                                    .border_color(if self.locale_menu_open {
+                                        colors.accent
+                                    } else {
+                                        colors.border
+                                    })
+                                    .bg(colors.panel_alt)
+                                    .text_sm()
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|app, _, _, cx| {
+                                        app.locale_menu_open = !app.locale_menu_open;
+                                        cx.notify();
+                                    }))
+                                    .child(format!(
+                                        "{}: {} v",
+                                        self.text("language.label"),
+                                        self.locale.label()
+                                    )),
                             ),
                     ),
             )
@@ -1978,52 +2032,6 @@ impl Render for AlterSendmeApp {
                             .child(
                                 div()
                                     .flex()
-                                    .flex_wrap()
-                                    .gap_2()
-                                    .child(self.button(
-                                        "diagnostics",
-                                        self.text("diagnostics.action"),
-                                        true,
-                                        colors,
-                                        cx,
-                                        |app, cx| app.run_diagnostics(cx),
-                                    ))
-                                    .child(self.button(
-                                        "history",
-                                        self.text("history.title"),
-                                        true,
-                                        colors,
-                                        cx,
-                                        |app, cx| app.show_history(cx),
-                                    ))
-                                    .child(self.button(
-                                        "relay-mode",
-                                        self.text("preferences.relay"),
-                                        true,
-                                        colors,
-                                        cx,
-                                        |app, cx| app.cycle_relay(cx),
-                                    ))
-                                    .child(self.button(
-                                        "retry-limit",
-                                        self.text("preferences.retry"),
-                                        true,
-                                        colors,
-                                        cx,
-                                        |app, cx| app.cycle_retry_limit(cx),
-                                    ))
-                                    .child(self.button(
-                                        "download-chunk",
-                                        self.text("preferences.chunk"),
-                                        true,
-                                        colors,
-                                        cx,
-                                        |app, cx| app.cycle_download_chunk(cx),
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .flex()
                                     .gap_2()
                                     .p_1()
                                     .rounded_md()
@@ -2041,6 +2049,66 @@ impl Render for AlterSendmeApp {
                                         cx,
                                     )),
                             )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap_2()
+                                    .child(self.utility_button(
+                                        "history",
+                                        self.text("history.title"),
+                                        self.history_open,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.show_history(cx),
+                                    ))
+                                    .child(self.utility_button(
+                                        "preferences",
+                                        self.text("preferences.title"),
+                                        self.preferences_open,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.show_preferences(cx),
+                                    ))
+                                    .child(self.utility_button(
+                                        "diagnostics",
+                                        self.text("diagnostics.action"),
+                                        self.diagnostics.is_some(),
+                                        colors,
+                                        cx,
+                                        |app, cx| app.run_diagnostics(cx),
+                                    )),
+                            )
+                            .when(self.history_open, |view| {
+                                view.child(history_panel(self, colors, cx))
+                            })
+                            .when(self.preferences_open, |view| {
+                                view.child(preferences_panel(self, colors, cx))
+                            })
+                            .when(self.diagnostics.is_some(), |view| {
+                                view.child(
+                                    div()
+                                        .p_4()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(colors.border)
+                                        .bg(colors.panel_alt)
+                                        .flex()
+                                        .flex_col()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(self.text("diagnostics.action")),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(colors.muted).child(
+                                                self.diagnostics.clone().unwrap_or_default(),
+                                            ),
+                                        ),
+                                )
+                            })
                             .child(
                                 div()
                                     .min_w(px(0.0))
@@ -2073,22 +2141,12 @@ impl Render for AlterSendmeApp {
                                                 .child(self.error.clone().unwrap_or_default()),
                                         )
                                     })
-                                    .when(self.history_open, |view| {
-                                        view.child(history_panel(self, colors, cx))
-                                    })
                                     .child(
                                         div()
                                             .text_sm()
                                             .text_color(colors.muted)
                                             .child(self.status.clone()),
-                                    )
-                                    .when(self.diagnostics.is_some(), |view| {
-                                        view.child(
-                                            div().text_xs().text_color(colors.muted).child(
-                                                self.diagnostics.clone().unwrap_or_default(),
-                                            ),
-                                        )
-                                    }),
+                                    ),
                             ),
                     ),
             )
@@ -2163,6 +2221,9 @@ impl Render for AlterSendmeApp {
                             .child(div().child(format!("v{}", env!("CARGO_PKG_VERSION")))),
                     ),
             )
+            .when(self.locale_menu_open, |view| {
+                view.child(locale_menu(self, colors, cx))
+            })
     }
 }
 
@@ -2372,7 +2433,10 @@ fn is_newer_version(current: &str, candidate: &str) -> bool {
 
 #[cfg(test)]
 mod update_tests {
-    use super::{current_asset_suffix, current_platform_key, is_newer_version};
+    use super::{
+        GITHUB_RELEASE_URL, RELEASES_URL, UPDATE_MANIFEST_URL, current_asset_suffix,
+        current_platform_key, is_newer_version,
+    };
 
     #[test]
     fn compares_semver_like_versions() {
@@ -2381,6 +2445,14 @@ mod update_tests {
         assert!(!is_newer_version("0.2.0", "0.2.0"));
         assert!(!is_newer_version("0.2.0", "0.1.99"));
         assert!(is_newer_version("v0.2.0", "v0.3.0"));
+    }
+
+    #[test]
+    fn update_endpoints_use_the_active_gpui_repository() {
+        for endpoint in [UPDATE_MANIFEST_URL, GITHUB_RELEASE_URL, RELEASES_URL] {
+            assert!(endpoint.contains("bruceblink/alter-sendmer"));
+            assert!(!endpoint.contains("bruceblink/alter-sendme/"));
+        }
     }
 
     #[test]
@@ -2555,17 +2627,200 @@ fn history_panel(
             )
         },
     );
-    rows.p_3()
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .p_4()
         .rounded_md()
+        .border_1()
+        .border_color(colors.border)
         .bg(colors.panel_alt)
-        .child(app.button(
-            "history-clear",
-            app.text("history.clear"),
-            !app.history.is_empty(),
-            colors,
-            cx,
-            |app, cx| app.clear_history(cx),
-        ))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(app.text("history.title")),
+                )
+                .child(app.button(
+                    "history-clear",
+                    app.text("history.clear"),
+                    !app.history.is_empty(),
+                    colors,
+                    cx,
+                    |app, cx| app.clear_history(cx),
+                )),
+        )
+        .when(app.history.is_empty(), |panel| {
+            panel.child(
+                div()
+                    .text_sm()
+                    .text_color(colors.muted)
+                    .child(app.text("history.empty")),
+            )
+        })
+        .when(!app.history.is_empty(), |panel| panel.child(rows))
+}
+
+fn preferences_panel(
+    app: &mut AlterSendmeApp,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .p_4()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.border)
+        .bg(colors.panel_alt)
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(app.text("preferences.title")),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .child(app.preference_button(
+                    "relay-mode",
+                    app.text("preferences.relay"),
+                    app.relay_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_relay(cx),
+                ))
+                .child(app.preference_button(
+                    "retry-limit",
+                    app.text("preferences.retry"),
+                    app.preferences.retry_limit.to_string(),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_retry_limit(cx),
+                ))
+                .child(app.preference_button(
+                    "download-chunk",
+                    app.text("preferences.chunk"),
+                    format!("{} MB", app.preferences.download_limit_mb),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_download_chunk(cx),
+                )),
+        )
+}
+
+fn locale_menu(
+    app: &mut AlterSendmeApp,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui::Stateful<gpui::Div> {
+    let ordered_locales = std::iter::once(app.locale)
+        .chain(
+            Locale::all()
+                .iter()
+                .copied()
+                .filter(|locale| *locale != app.locale),
+        )
+        .collect::<Vec<_>>();
+    let options = ordered_locales.into_iter().fold(
+        div().flex().flex_col().flex_shrink_0().gap_1(),
+        |menu, locale| {
+            let selected = locale == app.locale;
+            let locale_value = locale;
+            menu.child(
+                div()
+                    .id(format!("locale-option-{}", locale.code()))
+                    .focusable()
+                    .tab_stop(true)
+                    .role(A11yRole::ListBoxOption)
+                    .aria_label(locale.label())
+                    .aria_selected(selected)
+                    .flex_shrink_0()
+                    .h(px(38.0))
+                    .px_3()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .rounded_md()
+                    .bg(if selected {
+                        colors.accent.alpha(0.16)
+                    } else {
+                        colors.panel
+                    })
+                    .text_color(if selected { colors.accent } else { colors.text })
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(colors.panel_alt))
+                    .on_click(cx.listener(move |app, _, _, cx| app.select_locale(locale_value, cx)))
+                    .child(locale.label())
+                    .when(selected, |option| {
+                        option.child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("OK"),
+                        )
+                    }),
+            )
+        },
+    );
+
+    div()
+        .id("locale-menu")
+        .occlude()
+        .absolute()
+        .top(px(58.0))
+        .right(px(24.0))
+        .w(px(252.0))
+        .max_h(px(440.0))
+        .flex()
+        .flex_col()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.border)
+        .bg(colors.panel)
+        .shadow_lg()
+        .child(
+            div()
+                .h(px(46.0))
+                .flex_shrink_0()
+                .px_3()
+                .flex()
+                .items_center()
+                .justify_between()
+                .border_b_1()
+                .border_color(colors.border)
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(app.text("language.select")),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .child(app.locale.code()),
+                ),
+        )
+        .child(
+            div()
+                .id("locale-options-scroll")
+                .flex_1()
+                .min_h(px(0.0))
+                .overflow_y_scroll()
+                .p_2()
+                .child(options),
+        )
 }
 
 fn ticket_input(

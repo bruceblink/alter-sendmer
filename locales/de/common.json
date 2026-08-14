@@ -8,6 +8,13 @@
   "loading": "Wird geladen...",
   "browse": "Durchsuchen",
   "donate": "Spenden",
+  "diagnostics": { "action": "Diagnose", "client": "Client", "completed": "Diagnoseinformationen sind bereit" },
+  "update": { "checkNow": "Nach Updates suchen", "checking": "Wird geprüft...", "upToDate": "Bereits aktuell", "found": "Version v{{version}} ist verfügbar", "installed": "Update installiert, App neu starten", "failed": "Updateprüfung fehlgeschlagen" },
+  "theme": { "label": "Erscheinungsbild", "system": "System", "dark": "Dunkel", "light": "Hell", "switchHint": "Erscheinungsbild wechseln: {{theme}}" },
+  "language": { "label": "Sprache", "select": "Sprache auswählen" },
+  "history": { "title": "Übertragungsverlauf", "empty": "Noch keine Übertragungen", "clear": "Verlauf löschen", "cleared": "Übertragungsverlauf gelöscht" },
+  "preferences": { "title": "Übertragungseinstellungen", "relay": "Relay-Modus", "retry": "Wiederholungsgrenze", "chunk": "Download-Block", "default": "Automatisch", "disabled": "Nur direkt", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Status: {{value}}", "idle": "Bereit", "preparing": "Vorbereitung", "listening": "Warten auf Verbindung", "active": "Übertragung", "stopping": "Wird beendet", "completed": "Abgeschlossen", "failed": "Fehlgeschlagen" },
   "sender": {
     "title": "Senden",
     "subtitle": "Dateien oder Ordner über verschlüsselte Peer-to-Peer-Verbindungen teilen.",

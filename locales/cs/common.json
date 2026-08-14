@@ -8,6 +8,13 @@
   "loading": "Načítání...",
   "browse": "Procházet",
   "donate": "Přispět",
+  "diagnostics": { "action": "Diagnostika", "client": "Klient", "completed": "Diagnostika je připravena" },
+  "update": { "checkNow": "Zkontrolovat aktualizace", "checking": "Kontrola...", "upToDate": "Používáte nejnovější verzi", "found": "Je dostupná verze v{{version}}", "installed": "Aktualizace nainstalována, restartujte aplikaci", "failed": "Kontrola aktualizací selhala" },
+  "theme": { "label": "Motiv", "system": "Systémový", "dark": "Tmavý", "light": "Světlý", "switchHint": "Přepnout motiv: {{theme}}" },
+  "language": { "label": "Jazyk", "select": "Vyberte jazyk" },
+  "history": { "title": "Historie přenosů", "empty": "Zatím žádné přenosy", "clear": "Vymazat historii", "cleared": "Historie přenosů byla vymazána" },
+  "preferences": { "title": "Nastavení přenosu", "relay": "Režim relay", "retry": "Limit opakování", "chunk": "Blok stahování", "default": "Automaticky", "disabled": "Pouze přímé spojení", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Stav: {{value}}", "idle": "Nečinné", "preparing": "Příprava", "listening": "Čekání na připojení", "active": "Přenos", "stopping": "Zastavování", "completed": "Dokončeno", "failed": "Selhalo" },
   "sender": {
     "title": "Odeslat",
     "subtitle": "Sdílejte soubory nebo složky pomocí šifrovaného peer-to-peer spojení.",

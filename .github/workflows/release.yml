@@ -22,7 +22,7 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.91"
+          toolchain: "1.95"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Verify source

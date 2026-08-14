@@ -8,6 +8,13 @@
   "loading": "Yükleniyor...",
   "browse": "Gözat",
   "donate": "Bağış Yap",
+  "diagnostics": { "action": "Tanılama", "client": "İstemci", "completed": "Tanılama bilgileri hazır" },
+  "update": { "checkNow": "Güncellemeleri denetle", "checking": "Denetleniyor...", "upToDate": "Zaten güncel", "found": "v{{version}} sürümü kullanılabilir", "installed": "Güncelleme yüklendi, uygulamayı yeniden başlatın", "failed": "Güncelleme denetimi başarısız" },
+  "theme": { "label": "Tema", "system": "Sistem", "dark": "Koyu", "light": "Açık", "switchHint": "Temayı değiştir: {{theme}}" },
+  "language": { "label": "Dil", "select": "Dil seçin" },
+  "history": { "title": "Aktarım geçmişi", "empty": "Henüz aktarım yok", "clear": "Geçmişi temizle", "cleared": "Aktarım geçmişi temizlendi" },
+  "preferences": { "title": "Aktarım ayarları", "relay": "Aktarma modu", "retry": "Yeniden deneme sınırı", "chunk": "İndirme parçası", "default": "Otomatik", "disabled": "Yalnızca doğrudan", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Durum: {{value}}", "idle": "Boşta", "preparing": "Hazırlanıyor", "listening": "Bağlantı bekleniyor", "active": "Aktarılıyor", "stopping": "Durduruluyor", "completed": "Tamamlandı", "failed": "Başarısız" },
   "sender": {
     "title": "Gönder",
     "subtitle": "Dosyaları veya klasörleri şifreli eşler arası (P2P) bağlantılarla paylaşın.",

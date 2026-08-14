@@ -22,10 +22,15 @@
     "failed": "Update check failed"
   },
   "theme": {
+    "label": "Theme",
     "system": "System",
     "dark": "Dark",
     "light": "Light",
     "switchHint": "Switch theme: {{theme}}"
+  },
+  "language": {
+    "label": "Language",
+    "select": "Select language"
   },
   "sender": {
     "title": "Send",
@@ -57,6 +62,7 @@
     ,"openSharedFolder": "Open shared folder"
     ,"ticketSaved": "Ticket saved"
     ,"folderOpened": "Shared folder opened"
+    ,"ticketCopied": "Ticket copied to clipboard"
   },
   "receiver": {
     "title": "Receive Files",
@@ -109,9 +115,12 @@
     "cleared": "Transfer history cleared"
   },
   "preferences": {
+    "title": "Transfer settings",
     "relay": "Relay mode",
     "retry": "Retry limit",
     "chunk": "Download chunk",
+    "default": "Automatic",
+    "disabled": "Direct only",
     "value": "{{name}}: {{value}}"
   },
   "state": {

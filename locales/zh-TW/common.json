@@ -8,6 +8,30 @@
   "loading": "載入中...",
   "browse": "瀏覽",
   "donate": "捐贈",
+  "diagnostics": {
+    "action": "診斷資訊",
+    "client": "用戶端",
+    "completed": "診斷資訊已產生"
+  },
+  "update": {
+    "checkNow": "檢查更新",
+    "checking": "檢查中...",
+    "upToDate": "已是最新版本",
+    "found": "正在更新至 v{{version}}...",
+    "installed": "更新已安裝，重新啟動後生效",
+    "failed": "檢查更新失敗"
+  },
+  "theme": {
+    "label": "主題",
+    "system": "系統",
+    "dark": "深色",
+    "light": "淺色",
+    "switchHint": "切換主題：{{theme}}"
+  },
+  "language": {
+    "label": "語言",
+    "select": "選擇語言"
+  },
   "sender": {
     "title": "傳送",
     "subtitle": "透過加密的點對點連線分享檔案或資料夾。",
@@ -33,7 +57,12 @@
     "itemSelected": "已選擇項目",
     "browseFile": "瀏覽檔案",
     "browseFolder": "瀏覽資料夾",
-    "copyToClipboard": "複製到剪貼簿"
+    "copyToClipboard": "複製到剪貼簿",
+    "saveTicket": "儲存票券",
+    "openSharedFolder": "開啟分享資料夾",
+    "ticketSaved": "票券已儲存",
+    "folderOpened": "已開啟分享資料夾",
+    "ticketCopied": "票券已複製到剪貼簿"
   },
   "receiver": {
     "title": "接收檔案",
@@ -53,7 +82,8 @@
     "downloadingInProgress": "正在下載",
     "downloadCompleted": "下載完成",
     "openFolder": "開啟資料夾",
-    "stopReceiving": "停止接收"
+    "stopReceiving": "停止接收",
+    "invalidTicket": "票券無效或已過期"
   },
   "transfer": {
     "progress": "傳輸進度",
@@ -73,7 +103,35 @@
     "folderSize": "資料夾大小",
     "downloadPath": "下載路徑",
     "duration": "持續時間",
-    "avgSpeed": "平均速度"
+    "avgSpeed": "平均速度",
+    "files": "個檔案",
+    "failed": "傳輸失敗",
+    "tryAgain": "重試"
+  },
+  "history": {
+    "title": "傳輸記錄",
+    "empty": "尚無傳輸記錄",
+    "clear": "清除記錄",
+    "cleared": "傳輸記錄已清除"
+  },
+  "preferences": {
+    "title": "傳輸設定",
+    "relay": "中繼模式",
+    "retry": "重試次數",
+    "chunk": "下載分塊",
+    "default": "自動選擇",
+    "disabled": "僅直連",
+    "value": "{{name}}：{{value}}"
+  },
+  "state": {
+    "label": "狀態：{{value}}",
+    "idle": "閒置",
+    "preparing": "準備中",
+    "listening": "等待連線",
+    "active": "傳輸中",
+    "stopping": "正在停止",
+    "completed": "已完成",
+    "failed": "失敗"
   },
   "errors": {
     "sharingFailed": "分享失敗",

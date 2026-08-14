@@ -8,6 +8,13 @@
   "loading": "Chargement...",
   "browse": "Parcourir",
   "donate": "Faire un don",
+  "diagnostics": { "action": "Diagnostic", "client": "Client", "completed": "Diagnostic prêt" },
+  "update": { "checkNow": "Rechercher une mise à jour", "checking": "Vérification...", "upToDate": "Déjà à jour", "found": "La version v{{version}} est disponible", "installed": "Mise à jour installée, redémarrez l'application", "failed": "Échec de la recherche de mise à jour" },
+  "theme": { "label": "Thème", "system": "Système", "dark": "Sombre", "light": "Clair", "switchHint": "Changer de thème : {{theme}}" },
+  "language": { "label": "Langue", "select": "Choisir la langue" },
+  "history": { "title": "Historique des transferts", "empty": "Aucun transfert", "clear": "Effacer l'historique", "cleared": "Historique des transferts effacé" },
+  "preferences": { "title": "Paramètres de transfert", "relay": "Mode relais", "retry": "Limite de tentatives", "chunk": "Bloc de téléchargement", "default": "Automatique", "disabled": "Connexion directe uniquement", "value": "{{name}} : {{value}}" },
+  "state": { "label": "État : {{value}}", "idle": "Inactif", "preparing": "Préparation", "listening": "En attente de connexion", "active": "Transfert", "stopping": "Arrêt", "completed": "Terminé", "failed": "Échec" },
   "sender": {
     "title": "Envoyer",
     "subtitle": "Partagez des fichiers ou dossiers via des connexions pair-à-pair chiffrées.",

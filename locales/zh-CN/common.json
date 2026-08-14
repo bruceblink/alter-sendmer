@@ -8,6 +8,11 @@
   "loading": "加载中...",
   "browse": "浏览",
   "donate": "捐赠",
+  "diagnostics": {
+    "action": "诊断信息",
+    "client": "客户端",
+    "completed": "诊断信息已生成"
+  },
   "update": {
     "checkNow": "检查更新",
     "checking": "检查中...",
@@ -17,10 +22,15 @@
     "failed": "检查更新失败"
   },
   "theme": {
+    "label": "主题",
     "system": "系统",
     "dark": "深色",
     "light": "浅色",
     "switchHint": "切换主题：{{theme}}"
+  },
+  "language": {
+    "label": "语言",
+    "select": "选择语言"
   },
   "sender": {
     "title": "发送",
@@ -47,7 +57,12 @@
     "itemSelected": "已选择项目",
     "browseFile": "浏览文件",
     "browseFolder": "浏览文件夹",
-    "copyToClipboard": "复制到剪贴板"
+    "copyToClipboard": "复制到剪贴板",
+    "saveTicket": "保存票据",
+    "openSharedFolder": "打开共享文件夹",
+    "ticketSaved": "票据已保存",
+    "folderOpened": "已打开共享文件夹",
+    "ticketCopied": "票据已复制到剪贴板"
   },
   "receiver": {
     "title": "接收文件",
@@ -67,7 +82,8 @@
     "downloadingInProgress": "正在下载",
     "downloadCompleted": "下载完成",
     "openFolder": "打开文件夹",
-    "stopReceiving": "停止接收"
+    "stopReceiving": "停止接收",
+    "invalidTicket": "票据无效或已过期"
   },
   "transfer": {
     "progress": "传输进度",
@@ -87,7 +103,35 @@
     "folderSize": "文件夹大小",
     "downloadPath": "下载路径",
     "duration": "持续时间",
-    "avgSpeed": "平均速度"
+    "avgSpeed": "平均速度",
+    "files": "个文件",
+    "failed": "传输失败",
+    "tryAgain": "重试"
+  },
+  "history": {
+    "title": "传输历史",
+    "empty": "暂无传输记录",
+    "clear": "清空历史",
+    "cleared": "传输历史已清空"
+  },
+  "preferences": {
+    "title": "传输设置",
+    "relay": "中继模式",
+    "retry": "重试次数",
+    "chunk": "下载分块",
+    "default": "自动选择",
+    "disabled": "仅直连",
+    "value": "{{name}}：{{value}}"
+  },
+  "state": {
+    "label": "状态：{{value}}",
+    "idle": "空闲",
+    "preparing": "准备中",
+    "listening": "等待连接",
+    "active": "传输中",
+    "stopping": "正在停止",
+    "completed": "已完成",
+    "failed": "失败"
   },
   "errors": {
     "sharingFailed": "共享失败",

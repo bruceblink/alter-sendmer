@@ -8,6 +8,13 @@
   "loading": "Cargando...",
   "browse": "Buscar",
   "donate": "Donar",
+  "diagnostics": { "action": "Diagnóstico", "client": "Cliente", "completed": "Diagnóstico listo" },
+  "update": { "checkNow": "Buscar actualizaciones", "checking": "Comprobando...", "upToDate": "Ya está actualizado", "found": "La versión v{{version}} está disponible", "installed": "Actualización instalada, reinicia la aplicación", "failed": "Error al buscar actualizaciones" },
+  "theme": { "label": "Tema", "system": "Sistema", "dark": "Oscuro", "light": "Claro", "switchHint": "Cambiar tema: {{theme}}" },
+  "language": { "label": "Idioma", "select": "Seleccionar idioma" },
+  "history": { "title": "Historial de transferencias", "empty": "Aún no hay transferencias", "clear": "Borrar historial", "cleared": "Historial de transferencias borrado" },
+  "preferences": { "title": "Ajustes de transferencia", "relay": "Modo de retransmisión", "retry": "Límite de reintentos", "chunk": "Bloque de descarga", "default": "Automático", "disabled": "Solo conexión directa", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Estado: {{value}}", "idle": "Inactivo", "preparing": "Preparando", "listening": "Esperando conexión", "active": "Transfiriendo", "stopping": "Deteniendo", "completed": "Completado", "failed": "Fallido" },
   "sender": {
     "title": "Enviar",
     "subtitle": "Comparte archivos o carpetas mediante conexiones cifradas punto a punto.",

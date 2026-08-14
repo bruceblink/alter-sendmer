@@ -8,6 +8,13 @@
   "loading": "جاري التحميل...",
   "browse": "تصفح",
   "donate": "تبرع",
+  "diagnostics": { "action": "التشخيص", "client": "العميل", "completed": "معلومات التشخيص جاهزة" },
+  "update": { "checkNow": "التحقق من التحديث", "checking": "جارٍ التحقق...", "upToDate": "أحدث إصدار مثبت", "found": "يتوفر الإصدار v{{version}}", "installed": "تم تثبيت التحديث، أعد تشغيل التطبيق", "failed": "فشل التحقق من التحديث" },
+  "theme": { "label": "المظهر", "system": "النظام", "dark": "داكن", "light": "فاتح", "switchHint": "تبديل المظهر: {{theme}}" },
+  "language": { "label": "اللغة", "select": "اختر اللغة" },
+  "history": { "title": "سجل النقل", "empty": "لا توجد عمليات نقل بعد", "clear": "مسح السجل", "cleared": "تم مسح سجل النقل" },
+  "preferences": { "title": "إعدادات النقل", "relay": "وضع الترحيل", "retry": "حد إعادة المحاولة", "chunk": "حجم جزء التنزيل", "default": "تلقائي", "disabled": "اتصال مباشر فقط", "value": "{{name}}: {{value}}" },
+  "state": { "label": "الحالة: {{value}}", "idle": "خامل", "preparing": "جارٍ التحضير", "listening": "في انتظار الاتصال", "active": "جارٍ النقل", "stopping": "جارٍ الإيقاف", "completed": "مكتمل", "failed": "فشل" },
   "sender": {
     "title": "إرسال",
     "subtitle": "شارك الملفات أو المجلدات عبر اتصالات مشفرة من نظير إلى نظير.",

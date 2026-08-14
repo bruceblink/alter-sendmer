@@ -8,6 +8,13 @@
   "loading": "로딩 중...",
   "browse": "찾아보기",
   "donate": "기부하기",
+  "diagnostics": { "action": "진단 정보", "client": "클라이언트", "completed": "진단 정보가 준비되었습니다" },
+  "update": { "checkNow": "업데이트 확인", "checking": "확인 중...", "upToDate": "최신 버전입니다", "found": "v{{version}} 버전을 사용할 수 있습니다", "installed": "업데이트가 설치되었습니다. 앱을 다시 시작하세요", "failed": "업데이트 확인 실패" },
+  "theme": { "label": "테마", "system": "시스템", "dark": "어둡게", "light": "밝게", "switchHint": "테마 전환: {{theme}}" },
+  "language": { "label": "언어", "select": "언어 선택" },
+  "history": { "title": "전송 기록", "empty": "전송 기록이 없습니다", "clear": "기록 지우기", "cleared": "전송 기록을 지웠습니다" },
+  "preferences": { "title": "전송 설정", "relay": "릴레이 모드", "retry": "재시도 횟수", "chunk": "다운로드 청크", "default": "자동", "disabled": "직접 연결만", "value": "{{name}}: {{value}}" },
+  "state": { "label": "상태: {{value}}", "idle": "대기", "preparing": "준비 중", "listening": "연결 대기", "active": "전송 중", "stopping": "중지 중", "completed": "완료", "failed": "실패" },
   "sender": {
     "title": "보내기",
     "subtitle": "암호화된 피어투피어 연결을 통해 파일 또는 폴더를 공유합니다.",

@@ -8,6 +8,13 @@
   "loading": "Laster...",
   "browse": "Bla gjennom",
   "donate": "Doner",
+  "diagnostics": { "action": "Diagnostikk", "client": "Klient", "completed": "Diagnostikk er klar" },
+  "update": { "checkNow": "Se etter oppdatering", "checking": "Sjekker...", "upToDate": "Allerede oppdatert", "found": "Versjon v{{version}} er tilgjengelig", "installed": "Oppdatering installert, start appen på nytt", "failed": "Kunne ikke se etter oppdatering" },
+  "theme": { "label": "Utseende", "system": "System", "dark": "Mørk", "light": "Lys", "switchHint": "Bytt utseende: {{theme}}" },
+  "language": { "label": "Språk", "select": "Velg språk" },
+  "history": { "title": "Overføringshistorikk", "empty": "Ingen overføringer ennå", "clear": "Tøm historikk", "cleared": "Overføringshistorikken er tømt" },
+  "preferences": { "title": "Overføringsinnstillinger", "relay": "Relay-modus", "retry": "Grense for nye forsøk", "chunk": "Nedlastingsblokk", "default": "Automatisk", "disabled": "Bare direkte", "value": "{{name}}: {{value}}" },
+  "state": { "label": "Status: {{value}}", "idle": "Inaktiv", "preparing": "Forbereder", "listening": "Venter på tilkobling", "active": "Overfører", "stopping": "Stopper", "completed": "Fullført", "failed": "Mislyktes" },
   "sender": {
     "title": "Send",
     "subtitle": "Del filer eller mapper via krypterte peer-to-peer-tilkoblinger.",
