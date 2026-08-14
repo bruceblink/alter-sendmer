@@ -22,6 +22,8 @@ PrivilegesRequired=lowest
 [Files]
 Source: "..\artifacts\installer-input\AlterSendme.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: isreadme
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\AlterSendme"; Filename: "{app}\AlterSendme.exe"

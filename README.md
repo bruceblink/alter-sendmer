@@ -84,7 +84,8 @@ sender, receiver, transfer settings, minimum window, and complete language dropd
 ## Privacy and License
 
 Transfer history contains metadata only and never file contents. AlterSendme is licensed under
-[AGPL-3.0](LICENSE).
+[AGPL-3.0](LICENSE). See the [privacy policy](PRIVACY.md) for the local data and network services used
+by the native application.
 
 Support development through [GitHub Sponsors](https://github.com/sponsors/bruceblink) or
 [Buy Me a Coffee](https://buymeacoffee.com/bruceblink).

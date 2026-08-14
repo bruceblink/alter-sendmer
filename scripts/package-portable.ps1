@@ -34,6 +34,8 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 Get-ChildItem -LiteralPath $stage -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse
 Copy-Item -LiteralPath $executable -Destination (Join-Path $stage 'AlterSendme.exe')
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination (Join-Path $stage 'README.md')
+Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
+Copy-Item -LiteralPath (Join-Path $root 'PRIVACY.md') -Destination (Join-Path $stage 'PRIVACY.md')
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 $archive = Join-Path $output "AlterSendme-$versionValue-windows-portable.zip"
