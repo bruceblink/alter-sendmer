@@ -7,7 +7,7 @@ use cargo_packager_updater::{
 
 pub(crate) const UPDATE_MANIFEST_URL: &str =
     "https://github.com/bruceblink/alter-sendmer/releases/latest/download/latest.json";
-const UPDATE_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY5OTkxQjA2RDkwNUYxQ0YKUldUUDhRWFpCaHVaK2VhSE5jZHowd2swSzRuaDZmOTNwOFBuc0Jub0pWRFA2dzIvYVNiWU1XRkgK";
+const UPDATE_PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVDM0IyQTM0MzIzREVENjcKUldSbjdUMHlOQ283N05rYUg5S3pZRmdhNlhKSW5odVJTNnBTeDRYcnl2OUQ0ZlU5bXQ3OFd2dzkK";
 
 /// Keeps the verified release metadata needed by the second, user-confirmed install action.
 #[derive(Clone, Debug)]
