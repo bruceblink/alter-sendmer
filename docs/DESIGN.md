@@ -97,8 +97,13 @@ GPUI Window
 这些导航键回退为英文。`scripts/capture-ui-acceptance.ps1` 通过 UI Automation 核对下拉框暴露 21 个选项，
 并用 DWM `PrintWindow` 生成默认页、设置页、接收页、语言浮层和最小窗口截图。
 
-## 7. 兼容性策略
+## 7. 跨平台发布与更新
 
-初期以 Windows 为主要验收平台，GPUI 的 macOS/Linux 路径选择和窗口启动保持可编译。发送和
-接收协议行为由 `sendmer` 的跨平台测试负责；GPUI 客户端测试聚焦状态机、格式化、事件归并和
-generation 防竞态。
+Windows x86_64 发布 NSIS 安装器和 portable ZIP，Linux x86_64 发布 AppImage 与 DEB，macOS
+Apple Silicon 发布 app 更新归档和 DMG。三类更新归档由 cargo-packager 使用同一 minisign
+私钥签名；`latest.json` 按 `OS-ARCH` 映射下载地址、签名和安装格式。客户端只在签名验证通过后
+调用系统对应安装路径，启动时的检查保持静默，用户主动检查时才显示“已是最新”或错误。
+
+发送和接收协议行为由 `sendmer` 的跨平台测试负责；GPUI 客户端测试聚焦状态机、格式化、事件
+归并和 generation 防竞态。CI 在 Windows、Ubuntu 和 macOS 分别执行 fmt、check、Clippy 与测试，
+发布工作流还必须在三个原生 runner 上实际产出安装包，避免用交叉编译代替平台打包验收。

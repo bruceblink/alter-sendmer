@@ -38,24 +38,24 @@
 
 ## M5: 发布与迁移
 
-- 生成 Windows portable ZIP 与 Inno Setup 安装器，保留跨平台 Rust 构建入口。
+- 生成 Windows NSIS/portable、Linux AppImage/DEB 与 macOS app/DMG 原生包。
 - 将默认依赖切到公开 `sendmer` `2d4d6bf5ea79fb184ed70812db84fe4c265f485c` revision，使 GPUI 取消操作复用核心清理路径，并通过干净检出构建。
 - 发布前执行跨项目回归、资产检查和版本一致性校验。
 
 ## 工程化交付
 
-- `.github/workflows/ci.yml` 在 Windows 上执行 fmt、check、clippy 和 workspace tests。
-- `.github/workflows/release.yml` 在版本标签上构建 portable ZIP、SHA-256 校验文件和 Inno Setup 安装器。
-- `scripts/write-release-manifest.ps1` 生成 `latest.json`，供 GPUI 客户端的检查更新入口读取。
-- `scripts/package-portable.ps1` 与 `scripts/package-installer.ps1` 是本地与 CI 共用的唯一打包入口。
-- 安装器默认按用户权限安装到 `{autopf}`，不会要求管理员权限；portable 包不写入安装目录外的数据。
+- `.github/workflows/ci.yml` 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 workspace tests。
+- `.github/workflows/release.yml` 在三个原生 runner 上构建并签名安装包；手动运行可先只验证产物，不发布 Release。
+- `scripts/write-release-manifest.ps1` 校验每个平台的安装包与 `.sig` 一一对应，再生成 `latest.json` 和 `SHA256SUMS`。
+- `scripts/package-portable.ps1` 只负责 Windows 免安装包；其余原生格式统一由 cargo-packager 生成。
+- NSIS 安装器默认按用户权限安装；portable、AppImage 和 DMG 均不会在安装前修改用户文件。
 
 ## 当前批次边界
 
 M0-M5 已形成可运行的原生发送/接收主线；本批补齐了明确的六态失败/重试模型、目录进度、
-历史持久化、主题/relay/重试偏好、票据保存/打开、诊断入口与本地化生成。在线更新依赖
-GitHub release manifest，跨平台人工视觉回归仍需在发布流水线中单独验证，不能由 `cargo test`
-代替。
+历史持久化、主题/relay/重试偏好、票据保存/打开、诊断入口与本地化生成。在线更新依赖带
+minisign 签名的 GitHub release manifest；跨平台安装与人工视觉回归仍需在发布流水线中单独
+验证，不能由 `cargo test` 代替。
 
 归档旧 Tauri 仓库前的界面收敛已将导航重组为主任务、次级工具和设置面板三个层级；语言下拉改为
 顶层可滚动浮层，并为全部 21 种语言补齐应用外壳文案。Windows 发布验收使用

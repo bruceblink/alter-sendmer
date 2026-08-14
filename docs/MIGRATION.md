@@ -17,7 +17,7 @@ as a read-only source and release archive.
 | Reveal a completed download | Native platform file-manager reveal |
 | System, dark, and light themes | Persistent GPUI theme selector |
 | Language selection | Persistent dropdown with the same 21 locale catalogs |
-| Update and donation actions | GitHub Release manifest check and existing donation link |
+| Update and donation actions | Signed in-app update installation and existing donation link |
 
 The GPUI client additionally persists transfer metadata history and exposes relay mode, retry limit,
 download chunk, and diagnostics controls. Transfer protocol compatibility remains owned by sendmer,
@@ -41,7 +41,7 @@ application-data directories.
 ## Maintainer cutover checklist
 
 - The active repository passes format, check, Clippy, and test gates on its pinned toolchain.
-- A tagged release contains the installer, portable ZIP, SHA-256 files, and `latest.json`.
+- A tagged release contains Windows, Linux, and macOS packages, `SHA256SUMS`, signatures, and `latest.json`.
 - The release manifest and in-app update endpoints target `bruceblink/alter-sendmer`.
 - Desktop screenshots cover the default window, minimum window, receive tab, and language dropdown.
 - The legacy README redirects users before `bruceblink/alter-sendme` is archived.

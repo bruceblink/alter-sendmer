@@ -37,3 +37,21 @@ tempfile = "3"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+[package.metadata.packager]
+product-name = "AlterSendme"
+identifier = "top.likanug.alter-sendme"
+publisher = "BruceBlink"
+homepage = "https://github.com/bruceblink/alter-sendmer"
+category = "Utility"
+icons = ["assets/alter-sendme.png", "assets/alter-sendme.ico"]
+license-file = "LICENSE"
+resources = ["README.md", "PRIVACY.md"]
+before-packaging-command = "cargo build --locked --release"
+
+[[package.metadata.packager.binaries]]
+path = "alter-sendme-gpui"
+main = true
+
+[package.metadata.packager.macos]
+minimum-system-version = "12.0"

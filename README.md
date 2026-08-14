@@ -30,14 +30,10 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 
 ## Install
 
-Download the current Windows installer or portable ZIP from
-[GitHub Releases](https://github.com/bruceblink/alter-sendmer/releases/latest). Each package has a
-matching SHA-256 file, and `latest.json` supplies the same verified release location to the in-app
-update check.
-
-The GPUI release line is Windows-first. Archived macOS and Linux builds of the former Tauri client
-remain available from the [legacy releases](https://github.com/bruceblink/alter-sendme/releases), but
-they are no longer actively maintained.
+Download the Windows NSIS installer or portable ZIP, Linux AppImage or DEB, and macOS DMG from
+[GitHub Releases](https://github.com/bruceblink/alter-sendmer/releases/latest). `SHA256SUMS` covers
+the published packages. The application verifies the minisign signature embedded in `latest.json`
+before installing an update; update bundles are selected by operating system and architecture.
 
 ## Development
 
@@ -45,7 +41,7 @@ Requirements:
 
 - Rust `1.95` or newer
 - Native GPUI build prerequisites for the target platform
-- Inno Setup 6 only when producing the Windows installer
+- `cargo-packager` 0.11.8 when producing native packages
 
 ```powershell
 cargo fmt --all -- --check
@@ -63,14 +59,15 @@ directory.
 ## Packaging
 
 ```powershell
-cargo build --locked --release
+cargo install cargo-packager --version 0.11.8 --locked
+cargo packager --release --formats nsis --out-dir dist/windows-x86_64
 .\scripts\package-portable.ps1 -Version 0.2.0 -SkipBuild
-.\scripts\package-installer.ps1 -Version 0.2.0 -SkipBuild
-.\scripts\write-release-manifest.ps1 -Version 0.2.0
 ```
 
-Release tags run the same locked Rust gates before publishing a draft containing the installer,
-portable ZIP, SHA-256 files, and update manifest.
+Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
+all three operating-system packages, generate `latest.json` and `SHA256SUMS`, then publish the
+assets. The minisign private key is stored only in GitHub Actions secrets; trusted Windows and macOS
+code-signing certificates can be added independently when available.
 
 ## Documentation
 
