@@ -98,7 +98,7 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
                                 let _ = done.await;
                             }
                             if let Some(result) = send_result {
-                                let _ = result.shutdown().await;
+                                let _ = result.close().await;
                             }
                         };
                         let _ = tokio::time::timeout(Duration::from_secs(2), cleanup).await;

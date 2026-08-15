@@ -51,10 +51,9 @@ cargo test --workspace --locked
 cargo run
 ```
 
-The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It also pins the
-public [`sendmer`](https://github.com/bruceblink/sendmer) repository to the reviewed
-`2d4d6bf5ea79fb184ed70812db84fe4c265f485c` revision, so a clean checkout does not depend on a sibling
-directory.
+The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It consumes the
+published [`sendmer`](https://crates.io/crates/sendmer) `0.7.0` crate through its opaque
+`SendHandle` lifecycle API, so a clean checkout does not depend on a sibling directory or Git revision.
 
 ## Packaging
 

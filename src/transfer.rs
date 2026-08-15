@@ -3,7 +3,7 @@
 use async_channel::Sender;
 use sendmer::{
     AddrInfoOptions, AppHandle, EventEmitter, ReceiveOptions, RelayModeOption, SendOptions,
-    TransferEvent, send,
+    TransferEvent, send_handle,
 };
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::watch;
@@ -30,14 +30,15 @@ pub async fn start_send(
     sender: Sender<(u64, TransferEvent)>,
     generation: u64,
     relay_mode: RelayModeOption,
-) -> anyhow::Result<sendmer::SendResult> {
+) -> anyhow::Result<sendmer::SendHandle> {
     let options = SendOptions {
         relay_mode,
         ticket_type: AddrInfoOptions::RelayAndAddresses,
         magic_ipv4_addr: None,
         magic_ipv6_addr: None,
+        max_upload_rate_bytes_per_sec: None,
     };
-    send(path, options, emitter(sender, generation)).await
+    send_handle(path, options, emitter(sender, generation)).await
 }
 
 pub async fn start_receive(
@@ -103,15 +104,15 @@ mod tests {
                 RelayModeOption::Disabled,
             ))
             .expect("start adapter sender");
-        fs::write(ticket_path, result.ticket.to_string()).expect("publish sender ticket");
+        fs::write(ticket_path, result.ticket().to_string()).expect("publish sender ticket");
 
-        // Keep the SendResult alive until the receiver has finished and the parent closes stdin.
+        // Keep the SendHandle alive until the receiver has finished and the parent closes stdin.
         let mut signal = String::new();
         std::io::stdin()
             .read_to_string(&mut signal)
             .expect("wait for sender shutdown signal");
         runtime
-            .block_on(result.shutdown())
+            .block_on(result.close())
             .expect("shut down adapter sender");
 
         let mut events = Vec::new();

@@ -20,7 +20,7 @@
 
 - 文件/目录选择和 `ExternalPaths` 拖放。
 - `sendmer::send` 真实启动、ticket 展示/复制、事件进度。
-- 停止共享、SendResult 生命周期和退出清理。
+- 停止共享、`SendHandle` 生命周期和退出清理。
 - 验收：无网络单测 + 两进程本地/relay 手工传输，确认 ticket 可被另一端使用。
 
 ## M3: 接收主线
@@ -39,7 +39,7 @@
 ## M5: 发布与迁移
 
 - 生成 Windows NSIS/portable、Linux AppImage/DEB 与 macOS app/DMG 原生包。
-- 将默认依赖切到公开 `sendmer` `2d4d6bf5ea79fb184ed70812db84fe4c265f485c` revision，使 GPUI 取消操作复用核心清理路径，并通过干净检出构建。
+- 将默认依赖切到 crates.io 发布的 `sendmer = "0.7.0"`，通过 opaque `SendHandle` 复用核心关闭和清理路径，并通过干净检出构建。
 - 发布前执行跨项目回归、资产检查和版本一致性校验。
 
 ## 工程化交付

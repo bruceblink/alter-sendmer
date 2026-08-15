@@ -6920,8 +6920,9 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "sendmer"
-version = "0.6.0"
-source = "git+https://github.com/bruceblink/sendmer.git?rev=2d4d6bf5ea79fb184ed70812db84fe4c265f485c#2d4d6bf5ea79fb184ed70812db84fe4c265f485c"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68da9a25b7c6b40de66c52c95a386b2c8fd347cc92c95e54b110c9f162055b95"
 dependencies = [
  "anyhow",
  "clap",
@@ -6936,6 +6937,7 @@ dependencies = [
  "n0-future",
  "rand 0.9.5",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -10,7 +10,7 @@ use gpui::{
     FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
     Window, WindowAppearance, div, px, relative, rgb, svg,
 };
-use sendmer::{Role, SendResult, TransferEvent};
+use sendmer::{Role, SendHandle, TransferEvent};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -137,7 +137,7 @@ pub struct AlterSendmeApp {
     ticket_input: String,
     ticket_selection: Range<usize>,
     save_path: PathBuf,
-    send_result: Option<SendResult>,
+    send_result: Option<SendHandle>,
     send_abort: Option<tokio::task::AbortHandle>,
     receive_cancel: Option<tokio::sync::watch::Sender<bool>>,
     receive_done: Option<tokio::sync::oneshot::Receiver<()>>,
@@ -516,7 +516,7 @@ impl AlterSendmeApp {
             self.history_open = false;
             self.preferences_open = false;
             self.diagnostics = Some(format!(
-                "{} {} | {}={} | {}={} | sendmer=0.6",
+                "{} {} | {}={} | {}={} | sendmer=0.7",
                 self.text("diagnostics.client"),
                 env!("CARGO_PKG_VERSION"),
                 self.text("preferences.relay"),
@@ -742,11 +742,11 @@ impl AlterSendmeApp {
         .detach();
     }
 
-    fn apply_send_ready(&mut self, result: Result<SendResult, String>, cx: &mut Context<Self>) {
+    fn apply_send_ready(&mut self, result: Result<SendHandle, String>, cx: &mut Context<Self>) {
         match result {
             Ok(result) => {
                 self.send_abort = None;
-                self.ticket = Some(result.ticket.to_string());
+                self.ticket = Some(result.ticket().to_string());
                 self.send_result = Some(result);
                 self.send_phase = TransferPhase::Sharing;
                 self.status = self.status_text("listening", "Listening for a receiver");
@@ -809,7 +809,7 @@ impl AlterSendmeApp {
         self.send_phase = TransferPhase::Stopping;
         self.status = self.status_text("stopping", "Stopping share...");
         let task =
-            tokio::spawn(async move { result.shutdown().await.map_err(|error| error.to_string()) });
+            tokio::spawn(async move { result.close().await.map_err(|error| error.to_string()) });
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
             let mut cx = cx.clone();
@@ -869,7 +869,7 @@ impl AlterSendmeApp {
         }
         if let Some(result) = self.send_result.take() {
             tokio::spawn(async move {
-                let _ = result.shutdown().await;
+                let _ = result.close().await;
             });
         }
         self.send_phase = TransferPhase::Idle;
@@ -1053,7 +1053,7 @@ impl AlterSendmeApp {
     pub(crate) fn take_shutdown_resources(
         &mut self,
     ) -> (
-        Option<SendResult>,
+        Option<SendHandle>,
         Option<tokio::sync::oneshot::Receiver<()>>,
     ) {
         if let Some(abort) = self.send_abort.take() {
@@ -1086,7 +1086,7 @@ impl AlterSendmeApp {
         }
         if let Some(result) = self.send_result.take() {
             tokio::spawn(async move {
-                let _ = result.shutdown().await;
+                let _ = result.close().await;
             });
         }
         self.send_abort = None;
