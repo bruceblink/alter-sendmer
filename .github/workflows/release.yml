@@ -115,10 +115,24 @@ jobs:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*
           path: dist
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Generate release notes
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          python3 .github/scripts/generate_release_notes.py \
+            --tag "$RELEASE_TAG" \
+            --output release-notes.md
       - name: Build signed update manifest and checksums
         shell: pwsh
         run: ./scripts/write-release-manifest.ps1 -Version "$env:RELEASE_TAG" -ArtifactsDirectory dist -OutputPath dist/latest.json
@@ -126,7 +140,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
+          body_path: release-notes.md
+          generate_release_notes: false
           fail_on_unmatched_files: true
           files: |
             dist/**/*.exe
