@@ -2075,7 +2075,7 @@ impl Render for AlterSendmeApp {
                                         cx.notify();
                                     }))
                                     .child(format!(
-                                        "{}: {} v",
+                                        "{}: {}",
                                         self.text("language.label"),
                                         self.locale.label()
                                     )),
