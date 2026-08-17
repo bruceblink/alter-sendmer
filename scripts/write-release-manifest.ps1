@@ -59,7 +59,7 @@ function Resolve-UpdateAsset {
 
 $manifest = [ordered]@{
     version = $versionValue
-    notes = "AlterSendme v$versionValue"
+    notes = "AlterSendmer v$versionValue"
     pub_date = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     platforms = [ordered]@{
         'windows-x86_64' = Resolve-UpdateAsset 'windows-x86_64' '*_x64-setup.exe' 'nsis'

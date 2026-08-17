@@ -1,8 +1,8 @@
 # Migration from the Tauri client
 
 The GPUI repository at [`bruceblink/alter-sendmer`](https://github.com/bruceblink/alter-sendmer) is
-the active AlterSendme codebase. The former Tauri repository at `bruceblink/alter-sendme` is retained
-as a read-only source and release archive.
+the active AlterSendmer codebase. The former AlterSendme Tauri repository at
+`bruceblink/alter-sendme` is retained as a read-only source and release archive.
 
 ## Replacement coverage
 
@@ -26,7 +26,7 @@ so a ticket does not encode whether its sender used the Tauri or GPUI interface.
 ## User migration
 
 1. Stop any transfer that is still running in the Tauri application.
-2. Install AlterSendme from the active repository's
+2. Install AlterSendmer from the active repository's
    [latest release](https://github.com/bruceblink/alter-sendmer/releases/latest), or unpack the
    portable ZIP.
 3. Select the preferred theme, language, relay mode, retry limit, and download directory once.

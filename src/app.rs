@@ -562,7 +562,7 @@ impl AlterSendmeApp {
             .as_ref()
             .and_then(|path| path.file_name())
             .map(|name| format!("{}.sendme.ticket", name.to_string_lossy()))
-            .unwrap_or_else(|| "alter-sendme.ticket".to_owned());
+            .unwrap_or_else(|| "alter-sendmer.ticket".to_owned());
         let destination = self
             .selected_path
             .as_ref()

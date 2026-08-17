@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/alter-sendme-mark.svg" width="96" alt="AlterSendme logo">
+<img src="assets/alter-sendme-mark.svg" width="96" alt="AlterSendmer logo">
 
-# AlterSendme
+# AlterSendmer
 
 Native peer-to-peer file transfer built with Rust, GPUI, and sendmer.
 
@@ -12,11 +12,11 @@ Native peer-to-peer file transfer built with Rust, GPUI, and sendmer.
 
 </div>
 
-AlterSendme transfers files and folders directly between peers without uploading them to third-party
+AlterSendmer transfers files and folders directly between peers without uploading them to third-party
 cloud storage. The GPUI application replaces the retired Tauri/WebView client previously maintained
 at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 
-![AlterSendme GPUI workspace](artifacts/acceptance-send-1024x720-current.png)
+![AlterSendmer GPUI workspace](artifacts/acceptance-send-1024x720-current.png)
 
 ## Features
 
@@ -82,7 +82,7 @@ sender, receiver, transfer settings, minimum window, and complete language dropd
 
 ## Privacy and License
 
-Transfer history contains metadata only and never file contents. AlterSendme is licensed under
+Transfer history contains metadata only and never file contents. AlterSendmer is licensed under
 [AGPL-3.0](LICENSE). See the [privacy policy](PRIVACY.md) for the local data and network services used
 by the native application.
 

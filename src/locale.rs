@@ -157,6 +157,18 @@ mod tests {
     }
 
     #[test]
+    fn every_locale_uses_the_current_product_name() {
+        for locale in Locale::all() {
+            assert_eq!(
+                locale.lookup("appTitle"),
+                Some("AlterSendmer"),
+                "locale {} has stale product branding",
+                locale.code()
+            );
+        }
+    }
+
+    #[test]
     fn resolves_nested_common_translations() {
         assert_eq!(
             Locale::English.lookup("sender.startSharing"),

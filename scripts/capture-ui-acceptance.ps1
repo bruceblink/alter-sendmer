@@ -76,7 +76,7 @@ $process = if ($ProcessId) {
 }
 $window = $process.MainWindowHandle
 if ($window -eq [IntPtr]::Zero) {
-    throw 'AlterSendme does not have a visible main window.'
+    throw 'AlterSendmer does not have a visible main window.'
 }
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null

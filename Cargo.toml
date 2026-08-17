@@ -3,7 +3,7 @@ name = "alter-sendme-gpui"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.95"
-description = "Native GPUI client for AlterSendme peer-to-peer file transfer"
+description = "Native GPUI client for AlterSendmer peer-to-peer file transfer"
 repository = "https://github.com/bruceblink/alter-sendmer"
 license = "AGPL-3.0"
 readme = "README.md"
@@ -39,7 +39,7 @@ codegen-units = 1
 strip = "symbols"
 
 [package.metadata.packager]
-product-name = "AlterSendme"
+product-name = "AlterSendmer"
 identifier = "top.likanug.alter-sendme"
 publisher = "BruceBlink"
 homepage = "https://github.com/bruceblink/alter-sendmer"

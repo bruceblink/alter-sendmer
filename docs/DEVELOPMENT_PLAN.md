@@ -1,4 +1,4 @@
-# AlterSendme GPUI 开发计划
+# AlterSendmer GPUI 开发计划
 
 每个里程碑都是独立、可验证、可提交的小功能。完成一个功能后先执行对应验证，再提交并推送。
 

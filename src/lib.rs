@@ -1,4 +1,4 @@
-//! Native GPUI application for AlterSendme.
+//! Native GPUI application for AlterSendmer.
 
 mod app;
 mod locale;
@@ -55,8 +55,8 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         .with_assets(AppAssets)
         .run(move |cx| {
             cx.set_menus(vec![Menu {
-                name: "AlterSendme".into(),
-                items: vec![MenuItem::action("Quit AlterSendme", Quit)],
+                name: "AlterSendmer".into(),
+                items: vec![MenuItem::action("Quit AlterSendmer", Quit)],
                 disabled: false,
             }]);
             cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
@@ -80,7 +80,7 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
                 is_resizable: true,
                 is_minimizable: true,
                 titlebar: Some(TitlebarOptions {
-                    title: Some("AlterSendme".into()),
+                    title: Some("AlterSendmer".into()),
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -107,7 +107,7 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
                 .detach();
                 app
             }) {
-                tracing::error!(error = %error, "failed to open AlterSendme window");
+                tracing::error!(error = %error, "failed to open AlterSendmer window");
                 cx.quit();
             }
         });
