@@ -74,7 +74,7 @@ resume and is not evidence of kernel-level packet-loss or latency fault injectio
 ```powershell
 cargo install cargo-packager --version 0.11.8 --locked
 cargo packager --release --formats nsis --out-dir dist/windows-x86_64
-.\scripts\package-portable.ps1 -Version 0.4.0 -SkipBuild
+.\scripts\package-portable.ps1 -Version 0.5.0 -SkipBuild
 ```
 
 Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
