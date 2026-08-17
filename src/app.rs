@@ -2163,6 +2163,7 @@ impl AlterSendmeApp {
                                 .flex()
                                 .flex_col()
                                 .gap_1()
+                                .child(receive_step_heading("3", receive_action.clone(), colors))
                                 .child(
                                     self.button(
                                         "receive-start",
