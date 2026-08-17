@@ -2034,6 +2034,7 @@ impl AlterSendmeApp {
         let completed = self.receive_phase == TransferPhase::Completed;
         let failed = self.receive_phase == TransferPhase::Failed;
         let save = self.save_path.display().to_string();
+        let ticket_ready = !self.ticket_input.trim().is_empty();
         let receive_action = if failed {
             self.text("transfer.tryAgain")
         } else {
@@ -2048,54 +2049,34 @@ impl AlterSendmeApp {
         div()
             .flex()
             .flex_col()
-            .gap_4()
+            .gap_3()
             .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_start()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(300.0))
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(self.text("receiver.title")),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(colors.muted)
-                                    .child(self.text("receiver.subtitle")),
-                            )
-                            .child(div().text_xs().text_color(colors.muted).child(
-                                self.text("state.label").replace(
-                                    "{{value}}",
-                                    &state_label(self.receive_phase, self.locale),
-                                ),
-                            )),
-                    )
-                    .when(!receiving && !completed, |header| {
-                        header.child(self.secondary_button(
-                            "receiver-help",
-                            self.text("receiver.howToReceive"),
-                            true,
-                            colors,
-                            cx,
-                            |app, cx| app.toggle_receiver_help(cx),
-                        ))
-                    }),
-            )
-            .when(
-                self.receiver_help_open && !receiving && !completed,
-                |view| view.child(receiver_help_panel(self, colors)),
+                div().flex().items_start().justify_between().gap_3().child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.0))
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .text_lg()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(self.text("receiver.title")),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(colors.muted)
+                                .child(self.text("receiver.subtitle")),
+                        )
+                        .child(div().text_xs().text_color(colors.muted).child(
+                            self.text("state.label").replace(
+                                "{{value}}",
+                                &state_label(self.receive_phase, self.locale),
+                            ),
+                        )),
+                ),
             )
             .when(!receiving && !completed, |view| {
                 view.child(
@@ -2103,18 +2084,22 @@ impl AlterSendmeApp {
                         .flex()
                         .flex_col()
                         .gap_2()
+                        .child(receive_step_heading(
+                            "1",
+                            self.text("receiver.ticketLabel"),
+                            colors,
+                        ))
                         .child(
                             div()
                                 .flex()
                                 .flex_wrap()
                                 .items_center()
-                                .justify_between()
                                 .gap_2()
                                 .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(self.text("receiver.ticketLabel")),
+                                    ticket_input(self, colors, cx)
+                                        .flex_1()
+                                        .min_w(px(0.0))
+                                        .h(px(52.0)),
                                 )
                                 .child(self.secondary_button(
                                     "paste-ticket",
@@ -2125,53 +2110,83 @@ impl AlterSendmeApp {
                                     |app, cx| app.paste_ticket(cx),
                                 )),
                         )
-                        .child(ticket_input(self, colors, cx)),
-                )
-                .child(
-                    div()
-                        .py_3()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_3()
-                        .border_t_1()
-                        .border_b_1()
-                        .border_color(colors.border)
                         .child(
                             div()
-                                .flex_1()
-                                .min_w(px(0.0))
+                                .border_t_1()
+                                .border_color(colors.border)
+                                .pt_1()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child(receive_step_heading(
+                                    "2",
+                                    self.text("receiver.saveToFolder"),
+                                    colors,
+                                ))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .id("receive-destination")
+                                                .h(px(30.0))
+                                                .flex_1()
+                                                .min_w(px(0.0))
+                                                .px_3()
+                                                .flex()
+                                                .items_center()
+                                                .rounded_md()
+                                                .border_1()
+                                                .border_color(colors.border)
+                                                .bg(colors.panel_alt)
+                                                .text_sm()
+                                                .truncate()
+                                                .child(save.clone()),
+                                        )
+                                        .child(self.secondary_button(
+                                            "choose-save",
+                                            self.text("browse"),
+                                            true,
+                                            colors,
+                                            cx,
+                                            |app, cx| app.choose_save_path(cx),
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .border_t_1()
+                                .border_color(colors.border)
+                                .pt_1()
                                 .flex()
                                 .flex_col()
                                 .gap_1()
                                 .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(colors.muted)
-                                        .child(self.text("receiver.saveToFolder")),
+                                    self.button(
+                                        "receive-start",
+                                        receive_action,
+                                        ticket_ready,
+                                        colors,
+                                        cx,
+                                        |app, cx| app.begin_or_retry_receiving(cx),
+                                    )
+                                    .w_full()
+                                    .h(px(34.0)),
                                 )
-                                .child(div().text_sm().truncate().child(save)),
-                        )
-                        .child(self.secondary_button(
-                            "choose-save",
-                            self.text("browse"),
-                            true,
-                            colors,
-                            cx,
-                            |app, cx| app.choose_save_path(cx),
-                        )),
+                                .child(quiet_text_button(
+                                    "receiver-help",
+                                    self.text("receiver.howToReceive"),
+                                    colors,
+                                    cx,
+                                    |app, cx| app.toggle_receiver_help(cx),
+                                )),
+                        ),
                 )
-                .child(
-                    self.button(
-                        "receive-start",
-                        receive_action,
-                        !self.ticket_input.trim().is_empty(),
-                        colors,
-                        cx,
-                        |app, cx| app.begin_or_retry_receiving(cx),
-                    )
-                    .w_full(),
-                )
+                .when(self.receiver_help_open, |view| {
+                    view.child(receiver_help_panel(self, colors))
+                })
             })
             .when(receiving && !completed, |view| {
                 view.child(
@@ -2216,6 +2231,62 @@ impl AlterSendmeApp {
             })
             .into_any_element()
     }
+}
+
+/// Renders one numbered receive step so the idle screen reads as a single linear workflow.
+fn receive_step_heading(number: &'static str, title: String, colors: Palette) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(
+            div()
+                .w(px(20.0))
+                .h(px(20.0))
+                .flex_shrink_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .border_1()
+                .border_color(colors.accent)
+                .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(colors.accent)
+                .child(number),
+        )
+        .child(
+            div()
+                .text_sm()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(title),
+        )
+}
+
+/// Keeps help discoverable without giving it the visual weight of the receive action.
+fn quiet_text_button(
+    id: &'static str,
+    label: String,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+    action: impl Fn(&mut AlterSendmeApp, &mut Context<AlterSendmeApp>) + 'static,
+) -> gpui::Stateful<gpui::Div> {
+    div()
+        .id(id)
+        .focusable()
+        .tab_stop(true)
+        .role(A11yRole::Button)
+        .aria_label(label.clone())
+        .h(px(20.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_xs()
+        .text_color(colors.muted)
+        .cursor_pointer()
+        .hover(move |style| style.text_color(colors.text))
+        .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
+        .child(label)
 }
 
 async fn pump_events(
@@ -2498,7 +2569,7 @@ impl Render for AlterSendmeApp {
                                     .border_1()
                                     .border_color(colors.border)
                                     .bg(colors.panel)
-                                    .p_6()
+                                    .p_4()
                                     .flex()
                                     .flex_col()
                                     .gap_4()
