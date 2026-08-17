@@ -20,6 +20,8 @@ use std::{
 };
 
 const MAX_TICKET_LEN: usize = 16_384;
+const DEFAULT_UPLOAD_RATE_MIB_PER_SEC: u64 = 10;
+const MAX_UPLOAD_RATE_MIB_PER_SEC: u64 = 10_240;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -121,6 +123,8 @@ struct Preferences {
     relay: String,
     retry_limit: u32,
     download_limit_mb: u32,
+    #[serde(default)]
+    max_upload_rate_mib_per_sec: Option<u64>,
 }
 
 /// Owns all user-facing state and serializes async transfer completions by generation.
@@ -155,6 +159,9 @@ pub struct AlterSendmeApp {
     event_sender: Sender<(u64, TransferEvent)>,
     root_focus: FocusHandle,
     ticket_focus: FocusHandle,
+    upload_rate_focus: FocusHandle,
+    upload_rate_input: String,
+    upload_rate_selection: Range<usize>,
     generation: u64,
     update_checking: bool,
     update_installing: bool,
@@ -178,6 +185,13 @@ impl AlterSendmeApp {
             .and_then(|dirs| dirs.download_dir().map(PathBuf::from))
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
         let root_focus = cx.focus_handle();
+        let ticket_focus = cx.focus_handle();
+        let upload_rate_focus = cx.focus_handle();
+        let preferences = load_preferences();
+        let upload_rate_input = preferences
+            .max_upload_rate_mib_per_sec
+            .map(|rate| rate.to_string())
+            .unwrap_or_default();
         window.focus(&root_focus, cx);
         let app = Self {
             started_at,
@@ -209,7 +223,10 @@ impl AlterSendmeApp {
             transfer_started_at: None,
             event_sender,
             root_focus,
-            ticket_focus: cx.focus_handle(),
+            ticket_focus,
+            upload_rate_focus,
+            upload_rate_selection: upload_rate_input.len()..upload_rate_input.len(),
+            upload_rate_input,
             generation: 0,
             update_checking: false,
             update_installing: false,
@@ -219,7 +236,7 @@ impl AlterSendmeApp {
             history_open: false,
             preferences_open: false,
             locale_menu_open: false,
-            preferences: load_preferences(),
+            preferences,
             diagnostics: None,
             receiver_help_open: false,
             completed_stopped: false,
@@ -309,6 +326,13 @@ impl AlterSendmeApp {
         } else {
             self.text("preferences.default")
         }
+    }
+
+    fn upload_rate_label(&self) -> String {
+        self.preferences
+            .max_upload_rate_mib_per_sec
+            .map(|rate| format!("{rate} MiB/s"))
+            .unwrap_or_else(|| self.text("preferences.unlimited"))
     }
 
     fn text(&self, key: &str) -> String {
@@ -663,6 +687,33 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Switches upload pacing off and persists the unrestricted sender mode.
+    fn clear_upload_rate(&mut self, cx: &mut Context<Self>) {
+        self.preferences.max_upload_rate_mib_per_sec = None;
+        self.upload_rate_input.clear();
+        self.upload_rate_selection = 0..0;
+        persist_preferences(&self.preferences);
+        self.error = None;
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.uploadRate"))
+            .replace("{{value}}", &self.text("preferences.unlimited"));
+        cx.notify();
+    }
+
+    /// Enables a practical default limit, selects it for replacement, and focuses the numeric field.
+    fn focus_upload_rate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preferences.max_upload_rate_mib_per_sec.is_none() {
+            self.preferences.max_upload_rate_mib_per_sec = Some(DEFAULT_UPLOAD_RATE_MIB_PER_SEC);
+            self.upload_rate_input = DEFAULT_UPLOAD_RATE_MIB_PER_SEC.to_string();
+            persist_preferences(&self.preferences);
+        }
+        self.upload_rate_selection = 0..self.upload_rate_input.len();
+        self.error = None;
+        self.upload_rate_focus.focus(window, cx);
+        cx.notify();
+    }
+
     /// Records one finished or failed transfer while avoiding ticket/file contents beyond the
     /// sender ticket that is needed for history replay.
     fn record_history(
@@ -722,7 +773,13 @@ impl AlterSendmeApp {
         } else {
             sendmer::RelayModeOption::Default
         };
-        let task = tokio::spawn(transfer::start_send(path, events, generation, relay_mode));
+        let task = tokio::spawn(transfer::start_send(
+            path,
+            events,
+            generation,
+            relay_mode,
+            self.preferences.max_upload_rate_mib_per_sec,
+        ));
         self.send_abort = Some(task.abort_handle());
         let app = cx.entity().downgrade();
         cx.spawn(move |_, cx: &mut AsyncApp| {
@@ -894,6 +951,20 @@ impl AlterSendmeApp {
         {
             self.ticket_input = text;
             self.ticket_selection = self.ticket_input.len()..self.ticket_input.len();
+            cx.notify();
+        }
+    }
+
+    /// Routes a keyboard paste to the focused text field instead of always replacing the ticket.
+    fn paste_focused_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.upload_rate_focus.is_focused(window) {
+            self.paste_ticket(cx);
+            return;
+        }
+        if let Some(item) = cx.read_from_clipboard()
+            && let Some(text) = item.text()
+        {
+            self.replace_upload_rate(None, text.trim());
             cx.notify();
         }
     }
@@ -1880,14 +1951,15 @@ impl Render for AlterSendmeApp {
             .flex_col()
             .bg(colors.background)
             .text_color(colors.text)
-            .on_key_down(cx.listener(|app, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|app, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "v" && event.keystroke.modifiers.platform {
-                    app.paste_ticket(cx);
+                    app.paste_focused_input(window, cx);
                 } else if event.keystroke.key == "escape" && app.locale_menu_open {
                     app.locale_menu_open = false;
                     cx.notify();
                 } else if event.keystroke.key == "enter"
                     && app.tab == Tab::Receive
+                    && app.ticket_focus.is_focused(window)
                     && !event.keystroke.modifiers.shift
                 {
                     app.start_receiving(cx);
@@ -2240,21 +2312,31 @@ impl EntityInputHandler for AlterSendmeApp {
         &mut self,
         range: Range<usize>,
         adjusted: &mut Option<Range<usize>>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<String> {
-        let range = utf16_to_byte_range(&self.ticket_input, range);
-        *adjusted = Some(byte_to_utf16_range(&self.ticket_input, range.clone()));
-        Some(self.ticket_input.get(range)?.to_owned())
+        let text = if self.upload_rate_focus.is_focused(window) {
+            &self.upload_rate_input
+        } else {
+            &self.ticket_input
+        };
+        let range = utf16_to_byte_range(text, range);
+        *adjusted = Some(byte_to_utf16_range(text, range.clone()));
+        Some(text.get(range)?.to_owned())
     }
     fn selected_text_range(
         &mut self,
         _ignore_disabled_input: bool,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
+        let (text, selection) = if self.upload_rate_focus.is_focused(window) {
+            (&self.upload_rate_input, self.upload_rate_selection.clone())
+        } else {
+            (&self.ticket_input, self.ticket_selection.clone())
+        };
         Some(UTF16Selection {
-            range: byte_to_utf16_range(&self.ticket_input, self.ticket_selection.clone()),
+            range: byte_to_utf16_range(text, selection),
             reversed: false,
         })
     }
@@ -2270,10 +2352,14 @@ impl EntityInputHandler for AlterSendmeApp {
         &mut self,
         range: Option<Range<usize>>,
         text: &str,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.replace_ticket(range, text);
+        if self.upload_rate_focus.is_focused(window) {
+            self.replace_upload_rate(range, text);
+        } else {
+            self.replace_ticket(range, text);
+        }
         cx.notify();
     }
     fn replace_and_mark_text_in_range(
@@ -2281,12 +2367,20 @@ impl EntityInputHandler for AlterSendmeApp {
         range: Option<Range<usize>>,
         text: &str,
         selected: Option<Range<usize>>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.replace_ticket(range, text);
+        if self.upload_rate_focus.is_focused(window) {
+            self.replace_upload_rate(range, text);
+        } else {
+            self.replace_ticket(range, text);
+        }
         if let Some(selected) = selected {
-            self.ticket_selection = utf16_to_byte_range(&self.ticket_input, selected);
+            if self.upload_rate_focus.is_focused(window) {
+                self.upload_rate_selection = utf16_to_byte_range(&self.upload_rate_input, selected);
+            } else {
+                self.ticket_selection = utf16_to_byte_range(&self.ticket_input, selected);
+            }
         }
         cx.notify();
     }
@@ -2302,10 +2396,15 @@ impl EntityInputHandler for AlterSendmeApp {
     fn character_index_for_point(
         &mut self,
         _point: gpui::Point<gpui::Pixels>,
-        _window: &mut Window,
+        window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        Some(self.ticket_input.encode_utf16().count())
+        let text = if self.upload_rate_focus.is_focused(window) {
+            &self.upload_rate_input
+        } else {
+            &self.ticket_input
+        };
+        Some(text.encode_utf16().count())
     }
     fn accepts_text_input(&self, _window: &mut Window, _cx: &mut Context<Self>) -> bool {
         true
@@ -2323,6 +2422,39 @@ impl AlterSendmeApp {
             self.ticket_input.replace_range(start..end, text);
             self.ticket_selection = start + text.len()..start + text.len();
         }
+    }
+
+    /// Applies one numeric upload-rate edit and persists only a valid, representable value.
+    fn replace_upload_rate(&mut self, range: Option<Range<usize>>, text: &str) {
+        let range = range
+            .map(|range| utf16_to_byte_range(&self.upload_rate_input, range))
+            .unwrap_or_else(|| self.upload_rate_selection.clone());
+        let start = range.start.min(self.upload_rate_input.len());
+        let end = range.end.min(self.upload_rate_input.len());
+        if start > end {
+            return;
+        }
+        let mut candidate = self.upload_rate_input.clone();
+        candidate.replace_range(start..end, text);
+        let Ok(rate) = parse_upload_rate_input(&candidate) else {
+            self.error = Some(self.upload_rate_validation_error());
+            return;
+        };
+
+        self.upload_rate_input = candidate;
+        self.upload_rate_selection = start + text.len()..start + text.len();
+        self.preferences.max_upload_rate_mib_per_sec = rate;
+        persist_preferences(&self.preferences);
+        self.error = None;
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.uploadRate"))
+            .replace("{{value}}", &self.upload_rate_label());
+    }
+
+    fn upload_rate_validation_error(&self) -> String {
+        self.text("preferences.uploadRateInvalid")
+            .replace("{{max}}", &MAX_UPLOAD_RATE_MIB_PER_SEC.to_string())
     }
 }
 
@@ -2609,7 +2741,140 @@ fn preferences_panel(
                     colors,
                     cx,
                     |app, cx| app.cycle_download_chunk(cx),
-                )),
+                ))
+                .child(upload_rate_control(app, colors, cx)),
+        )
+}
+
+/// Renders the upload-rate mode and numeric MiB/s field as one stable preference control.
+fn upload_rate_control(
+    app: &mut AlterSendmeApp,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui::Stateful<gpui::Div> {
+    let unlimited = app.preferences.max_upload_rate_mib_per_sec.is_none();
+    let label = app.text("preferences.uploadRate");
+    let unlimited_label = app.text("preferences.unlimited");
+    let rate_value = if app.upload_rate_input.is_empty() {
+        DEFAULT_UPLOAD_RATE_MIB_PER_SEC.to_string()
+    } else {
+        app.upload_rate_input.clone()
+    };
+    let entity = cx.entity();
+    let focus = app.upload_rate_focus.clone();
+
+    div()
+        .id("upload-rate-control")
+        .h(px(56.0))
+        .flex_1()
+        .min_w(px(300.0))
+        .px_3()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .rounded_md()
+        .border_1()
+        .border_color(colors.border)
+        .bg(colors.panel)
+        .child(
+            div()
+                .text_sm()
+                .text_color(colors.muted)
+                .child(label.clone()),
+        )
+        .child(
+            div()
+                .h(px(34.0))
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(
+                    div()
+                        .id("upload-rate-unlimited")
+                        .focusable()
+                        .tab_stop(true)
+                        .role(A11yRole::Button)
+                        .aria_label(format!("{label}: {unlimited_label}"))
+                        .h_full()
+                        .min_w(px(96.0))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(if unlimited {
+                            colors.accent
+                        } else {
+                            colors.border
+                        })
+                        .bg(if unlimited {
+                            colors.accent.alpha(0.14)
+                        } else {
+                            colors.background
+                        })
+                        .text_color(if unlimited {
+                            colors.accent
+                        } else {
+                            colors.muted
+                        })
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .cursor_pointer()
+                        .on_click(cx.listener(|app, _, _, cx| app.clear_upload_rate(cx)))
+                        .child(unlimited_label),
+                )
+                .child(
+                    div()
+                        .id("upload-rate-input")
+                        .focusable()
+                        .tab_stop(true)
+                        .role(A11yRole::TextInput)
+                        .aria_label(format!("{label} MiB/s"))
+                        .relative()
+                        .h_full()
+                        .w(px(68.0))
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(if unlimited {
+                            colors.border
+                        } else {
+                            colors.accent
+                        })
+                        .bg(colors.background)
+                        .text_color(if unlimited { colors.muted } else { colors.text })
+                        .text_sm()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .cursor_pointer()
+                        .on_click(
+                            cx.listener(move |app, _, window, cx| {
+                                app.focus_upload_rate(window, cx)
+                            }),
+                        )
+                        .child(gpui::canvas(
+                            move |bounds, _, _| bounds,
+                            move |bounds, _, window, cx| {
+                                window.handle_input(
+                                    &focus,
+                                    ElementInputHandler::new(bounds, entity.clone()),
+                                    cx,
+                                );
+                            },
+                        ))
+                        .child(rate_value),
+                )
+                .child(
+                    div()
+                        .w(px(42.0))
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .child("MiB/s"),
+                ),
         )
 }
 
@@ -2861,14 +3126,39 @@ fn default_preferences() -> Preferences {
         relay: "default".to_owned(),
         retry_limit: 3,
         download_limit_mb: 32,
+        max_upload_rate_mib_per_sec: None,
     }
 }
 
 fn load_preferences() -> Preferences {
     fs::read_to_string(preferences_path())
         .ok()
-        .and_then(|contents| serde_json::from_str(&contents).ok())
+        .and_then(|contents| parse_preferences(&contents))
         .unwrap_or_else(default_preferences)
+}
+
+/// Decodes persisted preferences while treating an invalid upload limit as unrestricted.
+fn parse_preferences(contents: &str) -> Option<Preferences> {
+    let mut preferences = serde_json::from_str::<Preferences>(contents).ok()?;
+    if !matches!(
+        preferences.max_upload_rate_mib_per_sec,
+        None | Some(1..=MAX_UPLOAD_RATE_MIB_PER_SEC)
+    ) {
+        preferences.max_upload_rate_mib_per_sec = None;
+    }
+    Some(preferences)
+}
+
+/// Parses the editable MiB/s field; an empty field is the explicit unrestricted mode.
+fn parse_upload_rate_input(input: &str) -> Result<Option<u64>, ()> {
+    if input.is_empty() {
+        return Ok(None);
+    }
+    let rate = input.parse::<u64>().map_err(|_| ())?;
+    (1..=MAX_UPLOAD_RATE_MIB_PER_SEC)
+        .contains(&rate)
+        .then_some(Some(rate))
+        .ok_or(())
 }
 
 fn persist_preferences(preferences: &Preferences) {
@@ -2932,7 +3222,10 @@ fn ticket_is_valid(ticket: &str) -> bool {
 
 #[cfg(test)]
 mod history_tests {
-    use super::{HistoryEntry, Progress, TransferPhase, path_file_count, ticket_is_valid};
+    use super::{
+        HistoryEntry, Progress, TransferPhase, parse_preferences, parse_upload_rate_input,
+        path_file_count, ticket_is_valid,
+    };
 
     #[test]
     fn phase_model_exposes_idle_active_completion_and_failure() {
@@ -2989,6 +3282,45 @@ mod history_tests {
     fn receiver_rejects_empty_or_malformed_ticket() {
         assert!(!ticket_is_valid(""));
         assert!(!ticket_is_valid("sendme receive ticket"));
+    }
+
+    #[test]
+    fn preferences_migrate_without_an_upload_rate() {
+        let preferences =
+            parse_preferences(r#"{"relay":"default","retry_limit":3,"download_limit_mb":32}"#)
+                .expect("legacy preferences should parse");
+        assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
+    }
+
+    #[test]
+    fn preferences_preserve_valid_upload_rate_and_reject_invalid_values() {
+        let configured = parse_preferences(
+            r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"max_upload_rate_mib_per_sec":25}"#,
+        )
+        .expect("configured preferences should parse");
+        assert_eq!(configured.max_upload_rate_mib_per_sec, Some(25));
+
+        for invalid in [0, super::MAX_UPLOAD_RATE_MIB_PER_SEC + 1] {
+            let contents = format!(
+                r#"{{"relay":"default","retry_limit":3,"download_limit_mb":32,"max_upload_rate_mib_per_sec":{invalid}}}"#
+            );
+            let preferences =
+                parse_preferences(&contents).expect("invalid upload rate should be sanitized");
+            assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
+        }
+    }
+
+    #[test]
+    fn upload_rate_input_accepts_unlimited_and_bounded_integer_values() {
+        assert_eq!(parse_upload_rate_input(""), Ok(None));
+        assert_eq!(parse_upload_rate_input("1"), Ok(Some(1)));
+        assert_eq!(
+            parse_upload_rate_input(&super::MAX_UPLOAD_RATE_MIB_PER_SEC.to_string()),
+            Ok(Some(super::MAX_UPLOAD_RATE_MIB_PER_SEC))
+        );
+        assert_eq!(parse_upload_rate_input("0"), Err(()));
+        assert_eq!(parse_upload_rate_input("1.5"), Err(()));
+        assert_eq!(parse_upload_rate_input("fast"), Err(()));
     }
 }
 

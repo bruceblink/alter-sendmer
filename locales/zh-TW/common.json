@@ -120,6 +120,9 @@
     "relay": "中繼模式",
     "retry": "重試次數",
     "chunk": "下載分塊",
+    "uploadRate": "上傳上限",
+    "unlimited": "不限速",
+    "uploadRateInvalid": "請輸入 1 到 {{max}} 之間的整數（MiB/s）",
     "default": "自動選擇",
     "disabled": "僅直連",
     "value": "{{name}}：{{value}}"

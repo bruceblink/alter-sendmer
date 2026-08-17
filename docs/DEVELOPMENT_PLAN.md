@@ -2,6 +2,16 @@
 
 每个里程碑都是独立、可验证、可提交的小功能。完成一个功能后先执行对应验证，再提交并推送。
 
+## 术语与仓库边界
+
+| 规范名称 | English | 职责 |
+| --- | --- | --- |
+| 核心传输层 | sendmer Core | 维护协议、传输选项、限速与清理契约 |
+| 桌面客户端 | AlterSendmer Desktop | 消费正式 sendmer 版本，维护 GPUI 交互与平台能力 |
+| 传输适配器 | Transfer Adapter | 在两者之间映射配置、事件和生命周期 |
+
+桌面客户端不得复制核心传输逻辑，也不得使用 Git revision 绕过 sendmer 的正式版本发布顺序。
+
 ## M0: 工程与设计基线
 
 - 新建独立 crate，锁定与 `flash-shot` 相同的 GPUI commit。
@@ -42,6 +52,21 @@
 - 将默认依赖切到 crates.io 发布的 `sendmer = "0.7.0"`，通过 opaque `SendHandle` 复用核心关闭和清理路径，并通过干净检出构建。
 - 发布前执行跨项目回归、资产检查和版本一致性校验。
 
+## M6: v0.3.0 上传速率配置闭环
+
+- 在传输设置中提供“不限速”或 `1..10240 MiB/s` 自定义发送上限。
+- 兼容旧 `preferences.json`，持久化有效设置并拒绝零值、非整数和溢出值。
+- 由传输适配器转换为 sendmer bytes/s 选项；桌面客户端不实现第二套 limiter。
+- 补齐 21 种语言、配置迁移、参数映射和 GPUI 输入回归。
+- 验收：完整 fmt/check/Clippy/tests、Windows 默认与最小窗口设置页截图、`v0.3.0` 发布资产。
+
+## M7: v0.4.0 版本化事件消费
+
+- 等 sendmer `v0.8.0` 发布后，将依赖升级为正式的 `sendmer = "0.8.0"`。
+- 使用核心阶段、结构化错误和会话 ID 驱动 UI、历史与诊断信息。
+- 保持现有历史文件兼容，不记录完整 ticket 或绝对路径到诊断日志。
+- 验收：跨项目 contract tests、状态/错误 UI 截图和三平台发布门禁。
+
 ## 工程化交付
 
 - `.github/workflows/ci.yml` 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 workspace tests。
@@ -56,6 +81,9 @@ M0-M5 已形成可运行的原生发送/接收主线；本批补齐了明确的�
 历史持久化、主题/relay/重试偏好、票据保存/打开、诊断入口与本地化生成。在线更新依赖带
 minisign 签名的 GitHub release manifest；跨平台安装与人工视觉回归仍需在发布流水线中单独
 验证，不能由 `cargo test` 代替。
+
+当前实施批次是 M6。M7 不提前使用 sendmer Git revision；持久 cache、跨进程续传、账号、
+云端存储和后台同步服务均不属于 `v0.3.0`。
 
 归档旧 Tauri 仓库前的界面收敛已将导航重组为主任务、次级工具和设置面板三个层级；语言下拉改为
 顶层可滚动浮层，并为全部 21 种语言补齐应用外壳文案。Windows 发布验收使用

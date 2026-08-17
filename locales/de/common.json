@@ -13,7 +13,7 @@
   "theme": { "label": "Erscheinungsbild", "system": "System", "dark": "Dunkel", "light": "Hell", "switchHint": "Erscheinungsbild wechseln: {{theme}}" },
   "language": { "label": "Sprache", "select": "Sprache auswählen" },
   "history": { "title": "Übertragungsverlauf", "empty": "Noch keine Übertragungen", "clear": "Verlauf löschen", "cleared": "Übertragungsverlauf gelöscht" },
-  "preferences": { "title": "Übertragungseinstellungen", "relay": "Relay-Modus", "retry": "Wiederholungsgrenze", "chunk": "Download-Block", "default": "Automatisch", "disabled": "Nur direkt", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Übertragungseinstellungen", "relay": "Relay-Modus", "retry": "Wiederholungsgrenze", "chunk": "Download-Block", "uploadRate": "Upload-Limit", "unlimited": "Unbegrenzt", "uploadRateInvalid": "Geben Sie eine ganze Zahl von 1 bis {{max}} MiB/s ein", "default": "Automatisch", "disabled": "Nur direkt", "value": "{{name}}: {{value}}" },
   "state": { "label": "Status: {{value}}", "idle": "Bereit", "preparing": "Vorbereitung", "listening": "Warten auf Verbindung", "active": "Übertragung", "stopping": "Wird beendet", "completed": "Abgeschlossen", "failed": "Fehlgeschlagen" },
   "sender": {
     "title": "Senden",

@@ -13,7 +13,7 @@
   "theme": { "label": "ธีม", "system": "ระบบ", "dark": "มืด", "light": "สว่าง", "switchHint": "เปลี่ยนธีม: {{theme}}" },
   "language": { "label": "ภาษา", "select": "เลือกภาษา" },
   "history": { "title": "ประวัติการโอน", "empty": "ยังไม่มีการโอน", "clear": "ล้างประวัติ", "cleared": "ล้างประวัติการโอนแล้ว" },
-  "preferences": { "title": "การตั้งค่าการโอน", "relay": "โหมดรีเลย์", "retry": "จำนวนครั้งที่ลองใหม่", "chunk": "ส่วนดาวน์โหลด", "default": "อัตโนมัติ", "disabled": "เชื่อมต่อโดยตรงเท่านั้น", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "การตั้งค่าการโอน", "relay": "โหมดรีเลย์", "retry": "จำนวนครั้งที่ลองใหม่", "chunk": "ส่วนดาวน์โหลด", "uploadRate": "ขีดจำกัดการอัปโหลด", "unlimited": "ไม่จำกัด", "uploadRateInvalid": "ป้อนจำนวนเต็มตั้งแต่ 1 ถึง {{max}} MiB/s", "default": "อัตโนมัติ", "disabled": "เชื่อมต่อโดยตรงเท่านั้น", "value": "{{name}}: {{value}}" },
   "state": { "label": "สถานะ: {{value}}", "idle": "ว่าง", "preparing": "กำลังเตรียม", "listening": "รอการเชื่อมต่อ", "active": "กำลังโอน", "stopping": "กำลังหยุด", "completed": "เสร็จสิ้น", "failed": "ล้มเหลว" },
   "sender": {
     "title": "ส่ง",

@@ -13,7 +13,7 @@
   "theme": { "label": "Tema", "system": "Sistema", "dark": "Escuro", "light": "Claro", "switchHint": "Alterar tema: {{theme}}" },
   "language": { "label": "Idioma", "select": "Selecionar idioma" },
   "history": { "title": "Histórico de transferências", "empty": "Nenhuma transferência", "clear": "Limpar histórico", "cleared": "Histórico de transferências limpo" },
-  "preferences": { "title": "Configurações de transferência", "relay": "Modo relay", "retry": "Limite de tentativas", "chunk": "Bloco de download", "default": "Automático", "disabled": "Somente conexão direta", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Configurações de transferência", "relay": "Modo relay", "retry": "Limite de tentativas", "chunk": "Bloco de download", "uploadRate": "Limite de upload", "unlimited": "Ilimitado", "uploadRateInvalid": "Digite um número inteiro de 1 a {{max}} MiB/s", "default": "Automático", "disabled": "Somente conexão direta", "value": "{{name}}: {{value}}" },
   "state": { "label": "Estado: {{value}}", "idle": "Inativo", "preparing": "Preparando", "listening": "Aguardando conexão", "active": "Transferindo", "stopping": "Parando", "completed": "Concluído", "failed": "Falhou" },
   "sender": {
     "title": "Enviar",

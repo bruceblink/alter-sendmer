@@ -13,7 +13,7 @@
     "theme": { "label": "Motyw", "system": "Systemowy", "dark": "Ciemny", "light": "Jasny", "switchHint": "Zmień motyw: {{theme}}" },
     "language": { "label": "Język", "select": "Wybierz język" },
     "history": { "title": "Historia transferów", "empty": "Brak transferów", "clear": "Wyczyść historię", "cleared": "Historia transferów została wyczyszczona" },
-    "preferences": { "title": "Ustawienia transferu", "relay": "Tryb relay", "retry": "Limit ponowień", "chunk": "Blok pobierania", "default": "Automatycznie", "disabled": "Tylko bezpośrednio", "value": "{{name}}: {{value}}" },
+    "preferences": { "title": "Ustawienia transferu", "relay": "Tryb relay", "retry": "Limit ponowień", "chunk": "Blok pobierania", "uploadRate": "Limit wysyłania", "unlimited": "Bez limitu", "uploadRateInvalid": "Wprowadź liczbę całkowitą od 1 do {{max}} MiB/s", "default": "Automatycznie", "disabled": "Tylko bezpośrednio", "value": "{{name}}: {{value}}" },
     "state": { "label": "Stan: {{value}}", "idle": "Bezczynny", "preparing": "Przygotowanie", "listening": "Oczekiwanie na połączenie", "active": "Transfer", "stopping": "Zatrzymywanie", "completed": "Ukończono", "failed": "Niepowodzenie" },
     "sender": {
       "title": "Wyślij",

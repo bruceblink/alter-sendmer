@@ -13,7 +13,7 @@
   "theme": { "label": "테마", "system": "시스템", "dark": "어둡게", "light": "밝게", "switchHint": "테마 전환: {{theme}}" },
   "language": { "label": "언어", "select": "언어 선택" },
   "history": { "title": "전송 기록", "empty": "전송 기록이 없습니다", "clear": "기록 지우기", "cleared": "전송 기록을 지웠습니다" },
-  "preferences": { "title": "전송 설정", "relay": "릴레이 모드", "retry": "재시도 횟수", "chunk": "다운로드 청크", "default": "자동", "disabled": "직접 연결만", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "전송 설정", "relay": "릴레이 모드", "retry": "재시도 횟수", "chunk": "다운로드 청크", "uploadRate": "업로드 제한", "unlimited": "무제한", "uploadRateInvalid": "1에서 {{max}} MiB/s 사이의 정수를 입력하세요", "default": "자동", "disabled": "직접 연결만", "value": "{{name}}: {{value}}" },
   "state": { "label": "상태: {{value}}", "idle": "대기", "preparing": "준비 중", "listening": "연결 대기", "active": "전송 중", "stopping": "중지 중", "completed": "완료", "failed": "실패" },
   "sender": {
     "title": "보내기",

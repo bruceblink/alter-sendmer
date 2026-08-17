@@ -189,6 +189,9 @@ mod tests {
             "preferences.relay",
             "preferences.retry",
             "preferences.chunk",
+            "preferences.uploadRate",
+            "preferences.unlimited",
+            "preferences.uploadRateInvalid",
             "state.label",
         ];
         for locale in [Locale::SimplifiedChinese, Locale::TraditionalChinese] {
@@ -211,6 +214,9 @@ mod tests {
             "preferences.relay",
             "preferences.retry",
             "preferences.chunk",
+            "preferences.uploadRate",
+            "preferences.unlimited",
+            "preferences.uploadRateInvalid",
             "state.label",
         ];
         for locale in Locale::all()
@@ -237,6 +243,9 @@ mod tests {
             "history.title",
             "history.clear",
             "preferences.relay",
+            "preferences.uploadRate",
+            "preferences.unlimited",
+            "preferences.uploadRateInvalid",
             "sender.saveTicket",
             "receiver.invalidTicket",
             "transfer.tryAgain",

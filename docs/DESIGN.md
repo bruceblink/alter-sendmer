@@ -1,6 +1,18 @@
 # AlterSendme GPUI 设计说明
 
-## 1. 目标与边界
+## 1. 术语表与命名约定
+
+| 规范名称 | English / 缩写 | 职责边界 | 不代表什么 |
+| --- | --- | --- | --- |
+| 核心传输层 | sendmer Core | 负责 ticket、点对点传输、限速、重试和资源清理 | 不负责 GPUI 状态或本地化 |
+| 桌面客户端 | AlterSendmer Desktop | 负责配置、状态投影、历史和平台交互 | 不复制传输协议或 limiter |
+| 传输适配器 | Transfer Adapter | 把桌面配置和事件映射到 sendmer 公开 API | 不是第二套传输实现 |
+| 上传速率上限 | Upload Rate Limit | 一个 sender 对所有接收方共享的 payload 上限 | 不是每个 peer 的独立配额或精确 QoS |
+
+本文后续统一使用上述规范名称。核心传输层版本只能通过 crates.io 语义化版本依赖接入，
+不得使用本地 path 或 Git revision 作为发布依赖。
+
+## 2. 目标与边界
 
 本项目是 `F:\project\alter-sendme` 的原生 GPUI 1:1 重写，不改变用户可见的产品主线：
 
@@ -14,18 +26,19 @@
 核心项目，GPUI 客户端只负责生命周期、状态投影和交互；协议、加密、NAT 穿透、relay 和路径
 安全继续由 `F:\project\sendmer` 负责。
 
-## 2. 总体架构
+## 3. 总体架构
 
 ```text
 GPUI Window
   -> AlterSendmeApp (唯一 UI 状态机)
-     -> TransferController (异步 send/receive + cancel)
-        -> sendmer::{send, receive} (P2P/TLS/QUIC)
+     -> Transfer Adapter (异步 send/receive + cancel + options mapping)
+        -> sendmer 0.7.0::{send_handle, receive_with_cancellation} (P2P/TLS/QUIC)
+     -> Preferences (relay/retry/chunk/upload limit)
      -> Platform adapters (path prompt, clipboard, reveal, theme)
      -> Localization catalog (compile-time tables generated from the bundled locales directory)
 ```
 
-### 2.1 单进程状态模型
+### 3.1 单进程状态模型
 
 `AlterSendmeApp` 持有当前 tab、发送状态、接收状态、ticket 输入、选择路径、提示信息和主题。
 所有异步任务只通过 `WeakEntity` 回到 GPUI 主线程更新状态；任务完成前检查 generation，避免
@@ -36,26 +49,28 @@ GPUI Window
 `Idle -> Connecting -> Transporting -> Completed`，取消回到 `Idle`，失败进入 `Failed` 并保留
 可读错误。Completed 提供 Done/New transfer、Open folder，Failed 提供 Retry。
 
-### 2.2 事件桥
+### 3.2 事件桥
 
 实现 `sendmer::EventEmitter`，把 `TransferEvent` 转为无锁 `async_channel` 消息。`Started`、
 `Progress`、`FileNames`、`Completed` 和 `Failed` 均在 UI 线程消费；事件 emitter 不阻塞网络
 任务，丢失事件不会改变 sendmer 的错误控制流。
 
-### 2.3 资源与取消
+### 3.3 资源、取消与限速
 
 - 发送端保存 opaque `SendHandle`，直到用户停止共享或应用退出；router、store、temp tag
   和临时目录的生命周期由 sendmer `0.7.0` 内部管理。
 - 接收端保存 watch cancellation sender，取消按钮发出优雅取消信号；sendmer 负责关闭 endpoint、
   store 和临时目录，任务收尾后 GPUI 再统一清除状态。
 - 应用退出先停止发送 router，再等待接收任务结束。
+- 上传上限以 MiB/s 输入并持久化，传输适配器使用 checked multiplication 转换为
+  `SendOptions::max_upload_rate_bytes_per_sec`；`None` 表示无限制。实际 limiter 只存在于核心传输层。
 
-## 3. GPUI 映射
+## 4. GPUI 映射
 
 | 原 Tauri/React 能力 | GPUI 实现 |
 | --- | --- |
 | React `App` / hooks | `AlterSendmeApp` entity + Rust 方法 |
-| Tauri `invoke` | `TransferController` 的 tokio 任务 |
+| Tauri `invoke` | 传输适配器的 tokio 任务 |
 | Tauri event | `async_channel::Sender/Receiver<UiEvent>` |
 | `dialog.open` | `Window::prompt_for_paths` |
 | Tauri drag-drop | `ExternalPaths` + `.on_drop` |
@@ -69,26 +84,28 @@ GPUI Window
 
 传输历史保存在系统应用数据目录的 `history.json`，只写入角色、路径、大小、耗时、平均速度、
 时间、结果和发送端票据；不会写入文件内容。主题选择保存在同一应用配置目录，relay 模式和接收
-重试/块大小在工作台偏好控件中切换并传给 sendmer。
+重试/块大小在工作台偏好控件中切换；上传上限支持“不限速”或 `1..10240 MiB/s` 整数，
+所有配置均持久化并传给核心传输层。
 
-## 4. 视觉与交互
+## 5. 视觉与交互
 
 - 1024x720 起始窗口，最小 760x560，可调整大小；内容区在较小窗口中独立滚动并保留底部安全间距。
 - 深色默认、浅色可切换；主色为绿色，传输态使用蓝色，错误使用红色。
 - 应用窗口和安装快捷方式使用统一的 AlterSendme 传输标记；标记 SVG 编译期内嵌，Windows ICO 嵌入可执行文件。
 - 内容列宽限制为 720px，发送和接收共享同一工作台布局。
 - 发送/接收是唯一的主任务分段导航；历史、传输设置和诊断是低强调的次级工具，不再与传输参数混排为一组主按钮。
-- relay、重试和下载分块集中在可展开的传输设置面板，每个设置同时显示本地化名称与当前值。
+- relay、重试、下载分块和上传上限集中在可展开的传输设置面板；上传上限使用模式按钮与
+  固定宽度数字输入，不用文字卡片模拟数值控件。
 - 语言选择器是最后绘制的顶层浮层，始终覆盖而不是被内容区遮挡；当前语言固定在第一项，完整 21 项列表独立滚动。
 - 主要操作是带文字的命令按钮，主题和语言使用紧凑控件；固定高度、最小宽度和换行规则防止长翻译改变布局。
 - 任何传输进行中都禁用 tab 切换和会改变资源语义的选择动作。
 
-## 5. 可观测性与错误
+## 6. 可观测性与错误
 
 用户可见错误必须包含阶段（准备、共享、连接、接收）和底层错误消息；日志使用
 `tracing`/`log` 记录 ticket 生命周期和资源清理，不记录完整文件内容或私密 ticket 到持久日志。
 
-## 6. 本地化与可访问性
+## 7. 本地化与可访问性
 
 构建脚本读取项目内 `locales/<locale>/common.json`，在 `OUT_DIR` 生成只读 Rust 查找表；
 因此发布二进制不依赖运行时 JSON 文件。语言资源从原项目同步后随 GPUI 项目一起发布。GPUI 的主要动作、标签页、
@@ -97,7 +114,7 @@ GPUI Window
 这些导航键回退为英文。`scripts/capture-ui-acceptance.ps1` 通过 UI Automation 核对下拉框暴露 21 个选项，
 并用 DWM `PrintWindow` 生成默认页、设置页、接收页、语言浮层和最小窗口截图。
 
-## 7. 跨平台发布与更新
+## 8. 跨平台发布与更新
 
 Windows x86_64 发布 NSIS 安装器和 portable ZIP，Linux x86_64 发布 AppImage 与 DEB，macOS
 Apple Silicon 发布 app 更新归档和 DMG。三类更新归档由 cargo-packager 使用同一 minisign

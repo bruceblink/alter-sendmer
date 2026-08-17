@@ -120,6 +120,9 @@
     "relay": "Relay mode",
     "retry": "Retry limit",
     "chunk": "Download chunk",
+    "uploadRate": "Upload limit",
+    "unlimited": "Unlimited",
+    "uploadRateInvalid": "Enter a whole number from 1 to {{max}} MiB/s",
     "default": "Automatic",
     "disabled": "Direct only",
     "value": "{{name}}: {{value}}"

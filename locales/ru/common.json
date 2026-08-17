@@ -13,7 +13,7 @@
   "theme": { "label": "Тема", "system": "Системная", "dark": "Тёмная", "light": "Светлая", "switchHint": "Сменить тему: {{theme}}" },
   "language": { "label": "Язык", "select": "Выберите язык" },
   "history": { "title": "История передач", "empty": "Передач пока нет", "clear": "Очистить историю", "cleared": "История передач очищена" },
-  "preferences": { "title": "Настройки передачи", "relay": "Режим ретрансляции", "retry": "Лимит повторов", "chunk": "Блок загрузки", "default": "Автоматически", "disabled": "Только прямое соединение", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Настройки передачи", "relay": "Режим ретрансляции", "retry": "Лимит повторов", "chunk": "Блок загрузки", "uploadRate": "Ограничение отдачи", "unlimited": "Без ограничений", "uploadRateInvalid": "Введите целое число от 1 до {{max}} MiB/s", "default": "Автоматически", "disabled": "Только прямое соединение", "value": "{{name}}: {{value}}" },
   "state": { "label": "Состояние: {{value}}", "idle": "Ожидание", "preparing": "Подготовка", "listening": "Ожидание подключения", "active": "Передача", "stopping": "Остановка", "completed": "Завершено", "failed": "Ошибка" },
   "sender": {
     "title": "Отправить",

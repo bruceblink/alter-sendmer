@@ -13,7 +13,7 @@
   "theme": { "label": "Motiv", "system": "Systémový", "dark": "Tmavý", "light": "Světlý", "switchHint": "Přepnout motiv: {{theme}}" },
   "language": { "label": "Jazyk", "select": "Vyberte jazyk" },
   "history": { "title": "Historie přenosů", "empty": "Zatím žádné přenosy", "clear": "Vymazat historii", "cleared": "Historie přenosů byla vymazána" },
-  "preferences": { "title": "Nastavení přenosu", "relay": "Režim relay", "retry": "Limit opakování", "chunk": "Blok stahování", "default": "Automaticky", "disabled": "Pouze přímé spojení", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Nastavení přenosu", "relay": "Režim relay", "retry": "Limit opakování", "chunk": "Blok stahování", "uploadRate": "Limit odesílání", "unlimited": "Bez omezení", "uploadRateInvalid": "Zadejte celé číslo od 1 do {{max}} MiB/s", "default": "Automaticky", "disabled": "Pouze přímé spojení", "value": "{{name}}: {{value}}" },
   "state": { "label": "Stav: {{value}}", "idle": "Nečinné", "preparing": "Příprava", "listening": "Čekání na připojení", "active": "Přenos", "stopping": "Zastavování", "completed": "Dokončeno", "failed": "Selhalo" },
   "sender": {
     "title": "Odeslat",

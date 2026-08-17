@@ -120,6 +120,9 @@
     "relay": "中继模式",
     "retry": "重试次数",
     "chunk": "下载分块",
+    "uploadRate": "上传上限",
+    "unlimited": "不限速",
+    "uploadRateInvalid": "请输入 1 到 {{max}} 之间的整数（MiB/s）",
     "default": "自动选择",
     "disabled": "仅直连",
     "value": "{{name}}：{{value}}"

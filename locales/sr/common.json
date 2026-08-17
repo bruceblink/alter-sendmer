@@ -13,7 +13,7 @@
   "theme": { "label": "Тема", "system": "Системска", "dark": "Тамна", "light": "Светла", "switchHint": "Промени тему: {{theme}}" },
   "language": { "label": "Језик", "select": "Изаберите језик" },
   "history": { "title": "Историја преноса", "empty": "Још нема преноса", "clear": "Обриши историју", "cleared": "Историја преноса је обрисана" },
-  "preferences": { "title": "Подешавања преноса", "relay": "Релеј режим", "retry": "Ограничење покушаја", "chunk": "Блок преузимања", "default": "Аутоматски", "disabled": "Само директно", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Подешавања преноса", "relay": "Релеј режим", "retry": "Ограничење покушаја", "chunk": "Блок преузимања", "uploadRate": "Ограничење отпремања", "unlimited": "Неограничено", "uploadRateInvalid": "Унесите цео број од 1 до {{max}} MiB/s", "default": "Аутоматски", "disabled": "Само директно", "value": "{{name}}: {{value}}" },
   "state": { "label": "Стање: {{value}}", "idle": "Мирује", "preparing": "Припрема", "listening": "Чекање на везу", "active": "Пренос", "stopping": "Заустављање", "completed": "Завршено", "failed": "Неуспешно" },
   "sender": {
     "title": "Пошаљи",

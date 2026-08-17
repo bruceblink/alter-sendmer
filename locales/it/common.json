@@ -13,7 +13,7 @@
   "theme": { "label": "Tema", "system": "Sistema", "dark": "Scuro", "light": "Chiaro", "switchHint": "Cambia tema: {{theme}}" },
   "language": { "label": "Lingua", "select": "Seleziona lingua" },
   "history": { "title": "Cronologia trasferimenti", "empty": "Nessun trasferimento", "clear": "Cancella cronologia", "cleared": "Cronologia trasferimenti cancellata" },
-  "preferences": { "title": "Impostazioni trasferimento", "relay": "Modalità relay", "retry": "Limite tentativi", "chunk": "Blocco download", "default": "Automatico", "disabled": "Solo connessione diretta", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Impostazioni trasferimento", "relay": "Modalità relay", "retry": "Limite tentativi", "chunk": "Blocco download", "uploadRate": "Limite upload", "unlimited": "Illimitato", "uploadRateInvalid": "Inserisci un numero intero da 1 a {{max}} MiB/s", "default": "Automatico", "disabled": "Solo connessione diretta", "value": "{{name}}: {{value}}" },
   "state": { "label": "Stato: {{value}}", "idle": "Inattivo", "preparing": "Preparazione", "listening": "In attesa di connessione", "active": "Trasferimento", "stopping": "Arresto", "completed": "Completato", "failed": "Non riuscito" },
   "sender": {
     "title": "Invia",

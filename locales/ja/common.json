@@ -13,7 +13,7 @@
   "theme": { "label": "テーマ", "system": "システム", "dark": "ダーク", "light": "ライト", "switchHint": "テーマを切り替え: {{theme}}" },
   "language": { "label": "言語", "select": "言語を選択" },
   "history": { "title": "転送履歴", "empty": "転送履歴はありません", "clear": "履歴を消去", "cleared": "転送履歴を消去しました" },
-  "preferences": { "title": "転送設定", "relay": "リレーモード", "retry": "再試行回数", "chunk": "ダウンロード分割", "default": "自動", "disabled": "直接接続のみ", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "転送設定", "relay": "リレーモード", "retry": "再試行回数", "chunk": "ダウンロード分割", "uploadRate": "アップロード上限", "unlimited": "無制限", "uploadRateInvalid": "1 から {{max}} MiB/s の整数を入力してください", "default": "自動", "disabled": "直接接続のみ", "value": "{{name}}: {{value}}" },
   "state": { "label": "状態: {{value}}", "idle": "待機中", "preparing": "準備中", "listening": "接続待ち", "active": "転送中", "stopping": "停止中", "completed": "完了", "failed": "失敗" },
   "sender": {
     "title": "送信",
