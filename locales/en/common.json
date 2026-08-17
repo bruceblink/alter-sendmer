@@ -135,7 +135,10 @@
     "idle": "Idle",
     "preparing": "Preparing",
     "listening": "Listening",
+    "metadata": "Reading metadata",
     "active": "Active",
+    "exporting": "Saving files",
+    "finalizing": "Finalizing",
     "stopping": "Stopping",
     "completed": "Completed",
     "failed": "Failed"
@@ -153,6 +156,15 @@
     "fileDialogFailedDesc": "Failed to open file dialog",
     "receiveFailed": "Receive Failed",
     "receiveFailedDesc": "Failed to receive file",
+    "invalidInput": "Invalid transfer input",
+    "connectionFailed": "Connection failed",
+    "timeout": "Transfer timed out",
+    "remoteRejected": "Sender rejected the request",
+    "transferInterrupted": "Transfer interrupted",
+    "targetConflict": "A destination item already exists",
+    "filesystem": "File system operation failed",
+    "internal": "Unexpected transfer error",
+    "retryable": "you can retry",
     "openFolderFailed": "Open Folder Failed",
     "openFolderFailedDesc": "Failed to open download folder"
   }

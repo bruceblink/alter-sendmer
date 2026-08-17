@@ -135,7 +135,10 @@
     "idle": "空闲",
     "preparing": "准备中",
     "listening": "等待连接",
+    "metadata": "正在读取元数据",
     "active": "传输中",
+    "exporting": "正在保存文件",
+    "finalizing": "正在完成",
     "stopping": "正在停止",
     "completed": "已完成",
     "failed": "失败"
@@ -153,6 +156,15 @@
     "fileDialogFailedDesc": "无法打开文件对话框",
     "receiveFailed": "接收失败",
     "receiveFailedDesc": "无法接收文件",
+    "invalidInput": "传输输入无效",
+    "connectionFailed": "连接失败",
+    "timeout": "传输超时",
+    "remoteRejected": "发送方拒绝了请求",
+    "transferInterrupted": "传输已中断",
+    "targetConflict": "目标位置已存在同名项目",
+    "filesystem": "文件系统操作失败",
+    "internal": "发生意外的传输错误",
+    "retryable": "可以重试",
     "openFolderFailed": "打开文件夹失败",
     "openFolderFailedDesc": "无法打开下载文件夹"
   }

@@ -8,6 +8,8 @@
 | 桌面客户端 | AlterSendmer Desktop | 负责配置、状态投影、历史和平台交互 | 不复制传输协议或 limiter |
 | 传输适配器 | Transfer Adapter | 把桌面配置和事件映射到 sendmer 公开 API | 不是第二套传输实现 |
 | 上传速率上限 | Upload Rate Limit | 一个 sender 对所有接收方共享的 payload 上限 | 不是每个 peer 的独立配额或精确 QoS |
+| 事件信封 | Event Envelope | 承载 schema 版本、会话 ID、序号、阶段和事件载荷 | 不参与传输控制流或替代函数返回值 |
+| 结构化错误 | Structured Transfer Error | 承载错误码、失败阶段、可重试属性和安全摘要 | 不是本地化文案或完整 anyhow 错误链 |
 
 本文后续统一使用上述规范名称。核心传输层版本只能通过 crates.io 语义化版本依赖接入，
 不得使用本地 path 或 Git revision 作为发布依赖。
@@ -36,7 +38,7 @@
 GPUI Window
   -> AlterSendmeApp (唯一 UI 状态机)
      -> Transfer Adapter (异步 send/receive + cancel + options mapping)
-        -> sendmer 0.7.0::{send_handle, receive_with_cancellation} (P2P/TLS/QUIC)
+        -> sendmer 0.8.0::{send_handle, receive_with_cancellation} (P2P/TLS/QUIC)
      -> Preferences (relay/retry/chunk/upload limit)
      -> Platform adapters (path prompt, clipboard, reveal, theme)
      -> Localization catalog (compile-time tables generated from the bundled locales directory)
@@ -48,21 +50,23 @@ GPUI Window
 所有异步任务只通过 `WeakEntity` 回到 GPUI 主线程更新状态；任务完成前检查 generation，避免
 旧传输覆盖新传输。
 
-发送状态：`Idle -> Preparing -> Sharing -> Transporting -> Completed`，停止时进入
-`Stopping -> Idle`；启动或传输失败进入 `Failed`，可通过 `Try again` 重置。接收状态：
-`Idle -> Connecting -> Transporting -> Completed`，取消回到 `Idle`，失败进入 `Failed` 并保留
-可读错误。Completed 提供 Done/New transfer、Open folder，Failed 提供 Retry。
+发送状态：`Idle -> Preparing -> Sharing -> Metadata -> Transporting -> Finalizing -> Completed`，
+停止时进入 `Stopping -> Idle`；启动或传输失败进入 `Failed`，可通过 `Try again` 重置。接收状态：
+`Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Completed`，取消回到
+`Idle`，失败进入 `Failed` 并保留结构化错误摘要。Completed 提供 Done/New transfer、Open folder，
+Failed 提供 Retry。
 
 ### 3.2 事件桥
 
-实现 `sendmer::EventEmitter`，把 `TransferEvent` 转为无锁 `async_channel` 消息。`Started`、
-`Progress`、`FileNames`、`Completed` 和 `Failed` 均在 UI 线程消费；事件 emitter 不阻塞网络
-任务，丢失事件不会改变 sendmer 的错误控制流。
+实现 `sendmer::EventEmitter`，把 `TransferEventEnvelope` 转为无锁 `async_channel` 消息。适配器
+先校验 schema 版本、会话 ID 和严格递增序号，再按 `TransferEventData` 投影 `Started`、
+`Progress`、`FileNames`、`Completed`、`Failed` 和 `Cancelled`；事件 emitter 不阻塞网络任务，
+丢失事件不会改变 sendmer 的错误控制流。
 
 ### 3.3 资源、取消与限速
 
 - 发送端保存 opaque `SendHandle`，直到用户停止共享或应用退出；router、store、temp tag
-  和临时目录的生命周期由 sendmer `0.7.0` 内部管理。
+  和临时目录的生命周期由 sendmer `0.8.0` 内部管理。
 - 接收端保存 watch cancellation sender，取消按钮发出优雅取消信号；sendmer 负责关闭 endpoint、
   store 和临时目录，任务收尾后 GPUI 再统一清除状态。
 - 应用退出先停止发送 router，再等待接收任务结束。
@@ -107,8 +111,10 @@ GPUI Window
 
 ## 6. 可观测性与错误
 
-用户可见错误必须包含阶段（准备、共享、连接、接收）和底层错误消息；日志使用
-`tracing`/`log` 记录 ticket 生命周期和资源清理，不记录完整文件内容或私密 ticket 到持久日志。
+用户可见错误由 sendmer `TransferError` 提供稳定错误码、阶段、可重试属性和安全摘要；桌面端只
+本地化摘要，不展示完整 anyhow 错误链。日志使用 `tracing`/`log` 记录 ticket 生命周期和资源
+清理，不记录完整文件内容或私密 ticket 到持久日志。历史只增加可选 session ID、错误码和失败
+阶段字段，并继续兼容旧 `history.json`。
 
 ## 7. 本地化与可访问性
 

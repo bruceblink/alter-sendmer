@@ -93,7 +93,9 @@ mod tests {
     use async_channel::unbounded;
     use iroh::EndpointAddr;
     use iroh_blobs::{BlobFormat, Hash, ticket::BlobTicket};
-    use sendmer::{RelayModeOption, Role, TransferEvent};
+    use sendmer::{
+        RelayModeOption, Role, TRANSFER_EVENT_SCHEMA_VERSION, TransferEvent, TransferEventData,
+    };
     use std::fs;
     use std::io::{Read, Write};
     use std::process::{Command, Stdio};
@@ -106,6 +108,20 @@ mod tests {
     const SOURCE_PATH: &str = "ALTER_SENDME_TRANSFER_SOURCE";
     const TICKET_PATH: &str = "ALTER_SENDME_TRANSFER_TICKET";
     const OUTPUT_PATH: &str = "ALTER_SENDME_TRANSFER_OUTPUT";
+
+    /// Verifies the stable event envelope before the GPUI state machine consumes it.
+    fn assert_event_contract(events: &[(u64, TransferEvent)], role: Role) {
+        assert!(!events.is_empty(), "adapter should forward events");
+        assert!(events.iter().all(|(generation, _)| *generation == 41));
+        let session_id = events[0].1.session_id.clone();
+        for (index, (_, event)) in events.iter().enumerate() {
+            assert_eq!(event.schema_version, TRANSFER_EVENT_SCHEMA_VERSION);
+            assert_eq!(event.session_id, session_id);
+            assert_eq!(event.sequence, index as u64 + 1);
+            assert_eq!(event.role, role);
+        }
+        assert!(matches!(events[0].1.event, TransferEventData::Started));
+    }
 
     /// Runs the sender half in a separate OS process so iroh does not reject a self-connection.
     #[test]
@@ -141,12 +157,11 @@ mod tests {
         while let Ok(event) = event_receiver.try_recv() {
             events.push(event);
         }
-        assert!(events.iter().all(|(generation, _)| *generation == 41));
-        assert!(
-            events
-                .iter()
-                .any(|(_, event)| matches!(event, TransferEvent::Started { role: Role::Sender }))
-        );
+        assert_event_contract(&events, Role::Sender);
+        assert!(matches!(
+            events.last().map(|(_, event)| &event.event),
+            Some(TransferEventData::Completed)
+        ));
     }
 
     /// Runs the receiver half in a separate OS process and verifies the adapter event stream.
@@ -180,19 +195,11 @@ mod tests {
         while let Ok(event) = event_receiver.try_recv() {
             events.push(event);
         }
-        assert!(events.iter().all(|(generation, _)| *generation == 41));
-        assert!(events.iter().any(|(_, event)| matches!(
-            event,
-            TransferEvent::Started {
-                role: Role::Receiver
-            }
-        )));
-        assert!(events.iter().any(|(_, event)| matches!(
-            event,
-            TransferEvent::Completed {
-                role: Role::Receiver
-            }
-        )));
+        assert_event_contract(&events, Role::Receiver);
+        assert!(matches!(
+            events.last().map(|(_, event)| &event.event),
+            Some(TransferEventData::Completed)
+        ));
     }
 
     /// Uses the actual GPUI transfer adapter from two processes and compares the received bytes.
@@ -265,7 +272,7 @@ mod tests {
         );
         let staging_prefix = format!(".sendmer-recv-{}-", ticket.hash().to_hex());
         let before = temp_staging_dirs(&staging_prefix);
-        let (event_sender, _event_receiver) = unbounded();
+        let (event_sender, event_receiver) = unbounded();
         let (_, cancellation) = watch::channel(true);
         let runtime = tokio::runtime::Runtime::new().expect("create cancellation runtime");
 
@@ -283,6 +290,21 @@ mod tests {
 
         assert_eq!(error.to_string(), "Operation cancelled");
         assert_eq!(temp_staging_dirs(&staging_prefix), before);
+        let mut events = Vec::new();
+        while let Ok(event) = event_receiver.try_recv() {
+            events.push(event);
+        }
+        assert!(!events.is_empty());
+        let session_id = events[0].1.session_id.clone();
+        assert!(
+            events.iter().all(|(_, event)| {
+                event.role == Role::Receiver && event.session_id == session_id
+            })
+        );
+        assert!(matches!(
+            events.last().map(|(_, event)| &event.event),
+            Some(TransferEventData::Cancelled)
+        ));
     }
 
     #[test]

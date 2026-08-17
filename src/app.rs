@@ -10,7 +10,10 @@ use gpui::{
     FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
     Window, WindowAppearance, div, px, relative, rgb, svg,
 };
-use sendmer::{Role, SendHandle, TransferEvent};
+use sendmer::{
+    Role, SendHandle, TRANSFER_EVENT_SCHEMA_VERSION, TransferError, TransferErrorCode,
+    TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -42,7 +45,10 @@ enum TransferPhase {
     Preparing,
     Sharing,
     Connecting,
+    Metadata,
     Transporting,
+    Exporting,
+    Finalizing,
     Stopping,
     Completed,
     Failed,
@@ -55,7 +61,10 @@ impl TransferPhase {
             Self::Preparing
                 | Self::Sharing
                 | Self::Connecting
+                | Self::Metadata
                 | Self::Transporting
+                | Self::Exporting
+                | Self::Finalizing
                 | Self::Stopping
         )
     }
@@ -67,7 +76,10 @@ fn state_label(phase: TransferPhase, locale: Locale) -> String {
         TransferPhase::Preparing => "state.preparing",
         TransferPhase::Sharing => "state.listening",
         TransferPhase::Connecting => "state.preparing",
+        TransferPhase::Metadata => "state.metadata",
         TransferPhase::Transporting => "state.active",
+        TransferPhase::Exporting => "state.exporting",
+        TransferPhase::Finalizing => "state.finalizing",
         TransferPhase::Stopping => "state.stopping",
         TransferPhase::Completed => "state.completed",
         TransferPhase::Failed => "state.failed",
@@ -77,6 +89,64 @@ fn state_label(phase: TransferPhase, locale: Locale) -> String {
         .or_else(|| Locale::English.lookup(key))
         .unwrap_or(key)
         .to_owned()
+}
+
+fn transfer_error_code_name(code: TransferErrorCode) -> &'static str {
+    match code {
+        TransferErrorCode::InvalidInput => "invalid_input",
+        TransferErrorCode::ConnectionFailed => "connection_failed",
+        TransferErrorCode::Timeout => "timeout",
+        TransferErrorCode::RemoteRejected => "remote_rejected",
+        TransferErrorCode::TransferInterrupted => "transfer_interrupted",
+        TransferErrorCode::TargetConflict => "target_conflict",
+        TransferErrorCode::Filesystem => "filesystem",
+        TransferErrorCode::Internal => "internal",
+    }
+}
+
+fn transfer_error_locale_key(code: TransferErrorCode) -> &'static str {
+    match code {
+        TransferErrorCode::InvalidInput => "errors.invalidInput",
+        TransferErrorCode::ConnectionFailed => "errors.connectionFailed",
+        TransferErrorCode::Timeout => "errors.timeout",
+        TransferErrorCode::RemoteRejected => "errors.remoteRejected",
+        TransferErrorCode::TransferInterrupted => "errors.transferInterrupted",
+        TransferErrorCode::TargetConflict => "errors.targetConflict",
+        TransferErrorCode::Filesystem => "errors.filesystem",
+        TransferErrorCode::Internal => "errors.internal",
+    }
+}
+
+fn transfer_phase_name(phase: CoreTransferPhase) -> &'static str {
+    match phase {
+        CoreTransferPhase::Preparing => "preparing",
+        CoreTransferPhase::Connecting => "connecting",
+        CoreTransferPhase::Metadata => "metadata",
+        CoreTransferPhase::Transferring => "transferring",
+        CoreTransferPhase::Exporting => "exporting",
+        CoreTransferPhase::Finalizing => "finalizing",
+    }
+}
+
+fn ui_phase_for_core(role: Role, phase: CoreTransferPhase) -> TransferPhase {
+    match role {
+        Role::Sender => match phase {
+            CoreTransferPhase::Preparing => TransferPhase::Preparing,
+            CoreTransferPhase::Connecting => TransferPhase::Sharing,
+            CoreTransferPhase::Metadata => TransferPhase::Metadata,
+            CoreTransferPhase::Transferring => TransferPhase::Transporting,
+            CoreTransferPhase::Exporting => TransferPhase::Exporting,
+            CoreTransferPhase::Finalizing => TransferPhase::Finalizing,
+        },
+        Role::Receiver => match phase {
+            CoreTransferPhase::Preparing => TransferPhase::Preparing,
+            CoreTransferPhase::Connecting => TransferPhase::Connecting,
+            CoreTransferPhase::Metadata => TransferPhase::Metadata,
+            CoreTransferPhase::Transferring => TransferPhase::Transporting,
+            CoreTransferPhase::Exporting => TransferPhase::Exporting,
+            CoreTransferPhase::Finalizing => TransferPhase::Finalizing,
+        },
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -116,6 +186,49 @@ struct HistoryEntry {
     date: String,
     outcome: String,
     ticket: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error_phase: Option<String>,
+}
+
+/// Tracks the public event contract for one role without retaining tickets or local paths.
+#[derive(Clone, Debug, Default)]
+struct EventSessionState {
+    session_id: Option<String>,
+    sequence: u64,
+    error_code: Option<String>,
+    error_phase: Option<String>,
+    retryable: Option<bool>,
+}
+
+impl EventSessionState {
+    /// Accepts the schema's started-at-one stream and rejects gaps, duplicates, and late events.
+    fn accept(&mut self, event: &TransferEvent) -> bool {
+        if event.schema_version != TRANSFER_EVENT_SCHEMA_VERSION {
+            return false;
+        }
+        let session_id = event.session_id.as_str();
+        if self.session_id.as_deref() != Some(session_id) {
+            if event.sequence != 1 || !matches!(event.event, TransferEventData::Started) {
+                return false;
+            }
+            *self = Self {
+                session_id: Some(session_id.to_owned()),
+                sequence: 1,
+                ..Self::default()
+            };
+            return true;
+        }
+        let expected = self.sequence.saturating_add(1);
+        if event.sequence != expected {
+            return false;
+        }
+        self.sequence = event.sequence;
+        true
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -175,6 +288,8 @@ pub struct AlterSendmeApp {
     diagnostics: Option<String>,
     receiver_help_open: bool,
     completed_stopped: bool,
+    sender_event_state: EventSessionState,
+    receiver_event_state: EventSessionState,
 }
 
 impl AlterSendmeApp {
@@ -240,6 +355,8 @@ impl AlterSendmeApp {
             diagnostics: None,
             receiver_help_open: false,
             completed_stopped: false,
+            sender_event_state: EventSessionState::default(),
+            receiver_event_state: EventSessionState::default(),
         };
         let entity = cx.entity().downgrade();
         cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -539,14 +656,29 @@ impl AlterSendmeApp {
         } else {
             self.history_open = false;
             self.preferences_open = false;
+            let sender_session = self.sender_event_state.session_id.as_deref().unwrap_or("-");
+            let receiver_session = self
+                .receiver_event_state
+                .session_id
+                .as_deref()
+                .unwrap_or("-");
+            let last_error = self
+                .receiver_event_state
+                .error_code
+                .as_deref()
+                .or(self.sender_event_state.error_code.as_deref())
+                .unwrap_or("-");
             self.diagnostics = Some(format!(
-                "{} {} | {}={} | {}={} | sendmer=0.7",
+                "{} {} | {}={} | {}={} | sendmer=0.8 | sender_session={} | receiver_session={} | last_error={}",
                 self.text("diagnostics.client"),
                 env!("CARGO_PKG_VERSION"),
                 self.text("preferences.relay"),
                 self.relay_label(),
                 self.text("history.title"),
-                self.history.len()
+                self.history.len(),
+                sender_session,
+                receiver_session,
+                last_error
             ));
             self.status = self.text("diagnostics.completed");
         }
@@ -716,6 +848,48 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    fn event_state(&self, role: Role) -> &EventSessionState {
+        match role {
+            Role::Sender => &self.sender_event_state,
+            Role::Receiver => &self.receiver_event_state,
+        }
+    }
+
+    fn event_state_mut(&mut self, role: Role) -> &mut EventSessionState {
+        match role {
+            Role::Sender => &mut self.sender_event_state,
+            Role::Receiver => &mut self.receiver_event_state,
+        }
+    }
+
+    /// Accepts only a complete, strictly ordered session stream from sendmer's event contract.
+    fn accept_event(&mut self, event: &TransferEvent) -> bool {
+        self.event_state_mut(event.role).accept(event)
+    }
+
+    fn reset_event_state(&mut self, role: Role) {
+        *self.event_state_mut(role) = EventSessionState::default();
+    }
+
+    /// Projects the core phase onto the desktop state machine without reimplementing transport.
+    fn apply_core_phase(&mut self, role: Role, phase: CoreTransferPhase) {
+        let ui_phase = ui_phase_for_core(role, phase);
+        match role {
+            Role::Sender => self.send_phase = ui_phase,
+            Role::Receiver => self.receive_phase = ui_phase,
+        }
+    }
+
+    fn structured_error_message(&self, error: &TransferError) -> String {
+        let summary = self.text(transfer_error_locale_key(error.code));
+        let retry_hint = if error.retryable {
+            format!(" ({})", self.text("errors.retryable"))
+        } else {
+            String::new()
+        };
+        format!("{summary}: {}{retry_hint}", error.message)
+    }
+
     /// Records one finished or failed transfer while avoiding ticket/file contents beyond the
     /// sender ticket that is needed for history replay.
     fn record_history(
@@ -735,6 +909,12 @@ impl AlterSendmeApp {
         } else {
             (size as f64 / duration.as_secs_f64()) as u64
         };
+        let role_kind = if role == "sender" {
+            Role::Sender
+        } else {
+            Role::Receiver
+        };
+        let event_state = self.event_state(role_kind).clone();
         self.history.push(HistoryEntry {
             role: role.to_owned(),
             path: path
@@ -750,6 +930,9 @@ impl AlterSendmeApp {
             } else {
                 None
             },
+            session_id: event_state.session_id,
+            error_code: event_state.error_code,
+            error_phase: event_state.error_phase,
         });
         persist_history(&self.history);
     }
@@ -765,6 +948,7 @@ impl AlterSendmeApp {
         }
         self.generation += 1;
         let generation = self.generation;
+        self.reset_event_state(Role::Sender);
         self.send_phase = TransferPhase::Preparing;
         self.transfer_started_at = Some(Instant::now());
         self.status = self.status_text("preparing", "Preparing encrypted share...");
@@ -813,7 +997,9 @@ impl AlterSendmeApp {
             Err(error) => {
                 self.send_abort = None;
                 self.send_phase = TransferPhase::Failed;
-                self.error = Some(error);
+                if self.error.is_none() {
+                    self.error = Some(error);
+                }
                 self.status = self.status_text("transfer_failed", "Sharing failed");
             }
         }
@@ -822,7 +1008,10 @@ impl AlterSendmeApp {
 
     fn stop_sharing(&mut self, cx: &mut Context<Self>) {
         // Snapshot transfer metadata before shutdown clears the live send result and ticket.
-        let was_transporting = self.send_phase == TransferPhase::Transporting;
+        let was_transporting = matches!(
+            self.send_phase,
+            TransferPhase::Metadata | TransferPhase::Transporting | TransferPhase::Exporting
+        );
         let stopped_size = self.send_progress.processed;
         let stopped_name = self
             .selected_path
@@ -990,6 +1179,7 @@ impl AlterSendmeApp {
         }
         self.generation += 1;
         let generation = self.generation;
+        self.reset_event_state(Role::Receiver);
         self.receive_phase = TransferPhase::Connecting;
         self.receiver_help_open = false;
         self.transfer_started_at = Some(Instant::now());
@@ -1108,7 +1298,9 @@ impl AlterSendmeApp {
                     Some(self.receive_progress.processed),
                 );
                 self.transfer_started_at = None;
-                self.error = Some(error);
+                if self.error.is_none() {
+                    self.error = Some(error);
+                }
                 self.status = self.status_text("receive_failed", "Receive failed");
             }
         }
@@ -1154,11 +1346,20 @@ impl AlterSendmeApp {
             self.send_phase,
             TransferPhase::Preparing
                 | TransferPhase::Sharing
+                | TransferPhase::Metadata
                 | TransferPhase::Transporting
+                | TransferPhase::Exporting
+                | TransferPhase::Finalizing
                 | TransferPhase::Stopping
         ) || matches!(
             self.receive_phase,
-            TransferPhase::Connecting | TransferPhase::Transporting | TransferPhase::Stopping
+            TransferPhase::Preparing
+                | TransferPhase::Connecting
+                | TransferPhase::Metadata
+                | TransferPhase::Transporting
+                | TransferPhase::Exporting
+                | TransferPhase::Finalizing
+                | TransferPhase::Stopping
         );
         if active {
             self.error = Some(self.text("transfer.wasStopped"));
@@ -1196,6 +1397,8 @@ impl AlterSendmeApp {
         self.locale_menu_open = false;
         self.diagnostics = None;
         self.error = None;
+        self.sender_event_state = EventSessionState::default();
+        self.receiver_event_state = EventSessionState::default();
         self.status = self.status_text("ready", "Ready");
         cx.notify();
     }
@@ -1215,114 +1418,115 @@ impl AlterSendmeApp {
     }
 
     fn apply_event(&mut self, event: TransferEvent, cx: &mut Context<Self>) {
-        match event {
-            TransferEvent::Started { role: Role::Sender } => {
-                self.send_phase = TransferPhase::Sharing;
+        if !self.accept_event(&event) {
+            return;
+        }
+        let role = event.role;
+        let phase = event.phase;
+        self.apply_core_phase(role, phase);
+        match event.event {
+            TransferEventData::Started => {
                 self.transfer_started_at = Some(Instant::now());
-                self.status = self.status_text("listening", "Listening for a receiver");
+                self.status = match role {
+                    Role::Sender => self.status_text("preparing", "Preparing for transport"),
+                    Role::Receiver => self.status_text("connecting", "Connecting to sender"),
+                };
             }
-            TransferEvent::Started {
-                role: Role::Receiver,
-            } => {
-                self.receive_phase = TransferPhase::Transporting;
-                self.transfer_started_at = Some(Instant::now());
-                self.status = self.status_text("downloading", "Downloading in progress");
-            }
-            TransferEvent::Progress {
-                role: Role::Sender,
+            TransferEventData::Progress {
                 processed,
                 total,
-                speed,
-            } => {
-                self.send_phase = TransferPhase::Transporting;
-                let total_files = self.send_progress.total_files.max(
-                    self.selected_path
+                speed_bytes_per_sec,
+            } => match role {
+                Role::Sender => {
+                    let total_files = self.send_progress.total_files.max(
+                        self.selected_path
+                            .as_ref()
+                            .map(path_file_count)
+                            .unwrap_or(1),
+                    );
+                    self.send_progress = Progress {
+                        processed,
+                        total,
+                        speed: speed_bytes_per_sec,
+                        current_name: self.selected_path.as_ref().and_then(|path| {
+                            path.file_name()
+                                .map(|name| name.to_string_lossy().to_string())
+                        }),
+                        completed_files: if processed >= total && total > 0 {
+                            total_files
+                        } else {
+                            0
+                        },
+                        total_files,
+                    };
+                    self.send_phase = TransferPhase::Transporting;
+                    self.status = self.status_text("sharing", "Sharing in progress");
+                }
+                Role::Receiver => {
+                    self.receive_progress = Progress {
+                        processed,
+                        total,
+                        speed: speed_bytes_per_sec,
+                        current_name: self.receive_files.first().cloned(),
+                        completed_files: if processed >= total && total > 0 {
+                            self.receive_files.len().max(1) as u32
+                        } else {
+                            0
+                        },
+                        total_files: self.receive_files.len().max(1) as u32,
+                    };
+                    self.receive_phase = TransferPhase::Transporting;
+                    self.status = self.status_text("downloading", "Downloading in progress");
+                }
+            },
+            TransferEventData::FileNames { file_names } => {
+                if role == Role::Receiver {
+                    self.receive_progress.total_files = file_names.len().max(1) as u32;
+                    self.receive_files = file_names;
+                    self.receive_progress.current_name = self.receive_files.first().cloned();
+                    self.receive_phase = TransferPhase::Metadata;
+                }
+            }
+            TransferEventData::Completed => match role {
+                Role::Sender => {
+                    self.completed_stopped = false;
+                    self.send_phase = TransferPhase::Completed;
+                    self.send_progress.completed_files = self.send_progress.total_files;
+                    self.completed_name = self
+                        .selected_path
                         .as_ref()
-                        .map(path_file_count)
-                        .unwrap_or(1),
-                );
-                self.send_progress = Progress {
-                    processed,
-                    total,
-                    speed,
-                    current_name: self.selected_path.as_ref().and_then(|path| {
-                        path.file_name()
-                            .map(|name| name.to_string_lossy().to_string())
-                    }),
-                    completed_files: if processed >= total && total > 0 {
-                        total_files
-                    } else {
-                        0
-                    },
-                    total_files,
-                };
-                self.status = self.status_text("sharing", "Sharing in progress");
-            }
-            TransferEvent::Progress {
-                role: Role::Receiver,
-                processed,
-                total,
-                speed,
-            } => {
-                self.receive_phase = TransferPhase::Transporting;
-                self.receive_progress = Progress {
-                    processed,
-                    total,
-                    speed,
-                    current_name: self.receive_files.first().cloned(),
-                    completed_files: if processed >= total && total > 0 {
-                        self.receive_files.len().max(1) as u32
-                    } else {
-                        0
-                    },
-                    total_files: self.receive_files.len().max(1) as u32,
-                };
-                self.status = self.status_text("downloading", "Downloading in progress");
-            }
-            TransferEvent::FileNames {
-                role: Role::Receiver,
-                file_names,
-            } => {
-                self.receive_progress.total_files = file_names.len().max(1) as u32;
-                self.receive_files = file_names;
-                self.receive_progress.current_name = self.receive_files.first().cloned();
-            }
-            TransferEvent::FileNames {
-                role: Role::Sender, ..
-            } => {}
-            TransferEvent::Completed { role: Role::Sender } => {
-                self.completed_stopped = false;
-                self.send_phase = TransferPhase::Completed;
-                self.send_progress.completed_files = self.send_progress.total_files;
-                self.completed_name = self
-                    .selected_path
-                    .as_ref()
-                    .and_then(|path| path.file_name())
-                    .map(|name| name.to_string_lossy().to_string());
-                self.completed_path = self.selected_path.clone();
-                self.completed_size = self.send_progress.total;
-                self.completed_duration = self
-                    .transfer_started_at
-                    .unwrap_or(self.started_at)
-                    .elapsed();
-                self.transfer_started_at = None;
-                self.status = self.status_text("transfer_completed", "Transfer completed");
-                let path = self.selected_path.clone();
-                self.record_history(
-                    "sender",
-                    path.as_ref(),
-                    "completed",
-                    Some(self.send_progress.total),
-                );
-            }
-            TransferEvent::Completed {
-                role: Role::Receiver,
-            } => {
-                self.completed_stopped = false;
-                self.receive_phase = TransferPhase::Completed;
-                self.status = self.status_text("finalizing", "Finalizing download");
-            }
-            TransferEvent::Failed { role, message } => {
+                        .and_then(|path| path.file_name())
+                        .map(|name| name.to_string_lossy().to_string());
+                    self.completed_path = self.selected_path.clone();
+                    self.completed_size = self.send_progress.total;
+                    self.completed_duration = self
+                        .transfer_started_at
+                        .unwrap_or(self.started_at)
+                        .elapsed();
+                    self.transfer_started_at = None;
+                    self.status = self.status_text("transfer_completed", "Transfer completed");
+                    let path = self.selected_path.clone();
+                    self.record_history(
+                        "sender",
+                        path.as_ref(),
+                        "completed",
+                        Some(self.send_progress.total),
+                    );
+                }
+                Role::Receiver => {
+                    self.completed_stopped = false;
+                    self.receive_phase = TransferPhase::Finalizing;
+                    self.status = self.status_text("finalizing", "Finalizing download");
+                }
+            },
+            TransferEventData::Failed { error } => {
+                let message = self.structured_error_message(&error);
+                let error_code = transfer_error_code_name(error.code).to_owned();
+                let error_phase = transfer_phase_name(error.phase).to_owned();
+                let state = self.event_state_mut(role);
+                state.error_code = Some(error_code);
+                state.error_phase = Some(error_phase);
+                state.retryable = Some(error.retryable);
                 self.error = Some(message);
                 match role {
                     Role::Sender => {
@@ -1336,13 +1540,40 @@ impl AlterSendmeApp {
                         );
                     }
                     Role::Receiver => {
-                        // The receive task reports the terminal error below; recording here too
-                        // would duplicate one failed receive in history.
+                        // The receive task records the terminal failure once the cleanup result is
+                        // available, so this event only updates the visible error state.
                         self.receive_phase = TransferPhase::Failed;
                     }
                 }
                 self.transfer_started_at = None;
                 self.status = self.status_text("transfer_failed", "Transfer failed");
+            }
+            TransferEventData::Cancelled => {
+                self.completed_stopped = true;
+                self.transfer_started_at = None;
+                match role {
+                    Role::Sender => {
+                        self.send_phase = TransferPhase::Completed;
+                        let path = self.selected_path.clone();
+                        self.record_history(
+                            "sender",
+                            path.as_ref(),
+                            "cancelled",
+                            Some(self.send_progress.processed),
+                        );
+                    }
+                    Role::Receiver => {
+                        self.receive_phase = TransferPhase::Completed;
+                        let save_path = self.save_path.clone();
+                        self.record_history(
+                            "receiver",
+                            Some(&save_path),
+                            "cancelled",
+                            Some(self.receive_progress.processed),
+                        );
+                    }
+                }
+                self.status = self.status_text("stopped", "Transmission stopped");
             }
         }
         cx.notify();
@@ -1578,11 +1809,14 @@ impl AlterSendmeApp {
         let failed = self.send_phase == TransferPhase::Failed;
         let preparing = matches!(
             self.send_phase,
-            TransferPhase::Preparing | TransferPhase::Stopping
+            TransferPhase::Preparing | TransferPhase::Stopping | TransferPhase::Finalizing
         );
         let sharing = matches!(
             self.send_phase,
-            TransferPhase::Sharing | TransferPhase::Transporting
+            TransferPhase::Sharing
+                | TransferPhase::Metadata
+                | TransferPhase::Transporting
+                | TransferPhase::Exporting
         );
         let show_drop_zone = self.send_phase == TransferPhase::Idle;
         let progress = self.send_progress.clone();
@@ -2692,10 +2926,18 @@ fn history_panel(
         |panel, (index, entry)| {
             let ticket = entry.ticket.clone();
             let path = entry.path.clone();
-            let summary = format!(
+            let mut summary = format!(
                 "{} | {} | {} bytes | {} ms | {}",
                 entry.role, entry.outcome, entry.size, entry.duration_ms, entry.date
             );
+            if let Some(session_id) = entry.session_id.as_deref() {
+                let short_id = session_id.get(..8).unwrap_or(session_id);
+                summary.push_str(&format!(" | session {short_id}"));
+            }
+            if let Some(error_code) = entry.error_code.as_deref() {
+                let error_phase = entry.error_phase.as_deref().unwrap_or("unknown");
+                summary.push_str(&format!(" | {error_code}@{error_phase}"));
+            }
             panel.child(
                 div()
                     .flex()
@@ -3340,8 +3582,13 @@ fn ticket_is_valid(ticket: &str) -> bool {
 #[cfg(test)]
 mod history_tests {
     use super::{
-        HistoryEntry, Progress, TransferPhase, parse_preferences, parse_upload_rate_input,
-        path_file_count, ticket_is_valid,
+        EventSessionState, HistoryEntry, Progress, TransferPhase, parse_preferences,
+        parse_upload_rate_input, path_file_count, ticket_is_valid, transfer_error_code_name,
+        ui_phase_for_core,
+    };
+    use sendmer::{
+        Role, TRANSFER_EVENT_SCHEMA_VERSION, TransferErrorCode, TransferEvent, TransferEventData,
+        TransferPhase as CoreTransferPhase, TransferSessionId,
     };
 
     #[test]
@@ -3389,10 +3636,99 @@ mod history_tests {
             date: "1".into(),
             outcome: "completed".into(),
             ticket: Some("ticket".into()),
+            session_id: Some("0123456789abcdef0123456789abcdef".into()),
+            error_code: None,
+            error_phase: None,
         };
         let encoded = serde_json::to_string(&entry).expect("history serializes");
         let decoded: HistoryEntry = serde_json::from_str(&encoded).expect("history parses");
         assert_eq!(decoded, entry);
+    }
+
+    #[test]
+    fn legacy_history_entries_default_versioned_event_metadata() {
+        let decoded: HistoryEntry = serde_json::from_str(
+            r#"{"role":"receiver","path":"downloads","size":1,"duration_ms":2,"speed":3,"date":"4","outcome":"completed","ticket":null}"#,
+        )
+        .expect("legacy history parses");
+        assert_eq!(decoded.session_id, None);
+        assert_eq!(decoded.error_code, None);
+        assert_eq!(decoded.error_phase, None);
+    }
+
+    #[test]
+    fn versioned_event_cursor_rejects_gaps_duplicates_and_non_started_sessions() {
+        let session_id = TransferSessionId::new();
+        let started = TransferEvent::new(
+            session_id.clone(),
+            1,
+            1,
+            Role::Receiver,
+            CoreTransferPhase::Preparing,
+            TransferEventData::Started,
+        );
+        let progress = TransferEvent::new(
+            session_id.clone(),
+            2,
+            2,
+            Role::Receiver,
+            CoreTransferPhase::Transferring,
+            TransferEventData::Progress {
+                processed: 1,
+                total: 2,
+                speed_bytes_per_sec: 1.0,
+            },
+        );
+        let gap = TransferEvent::new(
+            session_id,
+            4,
+            4,
+            Role::Receiver,
+            CoreTransferPhase::Finalizing,
+            TransferEventData::Completed,
+        );
+        let mut state = EventSessionState::default();
+        let mut unsupported_schema = started.clone();
+        unsupported_schema.schema_version = TRANSFER_EVENT_SCHEMA_VERSION + 1;
+        assert!(!state.accept(&unsupported_schema));
+        assert!(state.accept(&started));
+        assert!(!state.accept(&started));
+        assert!(state.accept(&progress));
+        assert!(!state.accept(&gap));
+
+        let unexpected = TransferEvent::new(
+            TransferSessionId::new(),
+            1,
+            5,
+            Role::Receiver,
+            CoreTransferPhase::Transferring,
+            TransferEventData::Progress {
+                processed: 1,
+                total: 1,
+                speed_bytes_per_sec: 1.0,
+            },
+        );
+        assert!(!EventSessionState::default().accept(&unexpected));
+    }
+
+    #[test]
+    fn core_phases_and_error_codes_map_to_stable_desktop_values() {
+        assert_eq!(
+            ui_phase_for_core(Role::Receiver, CoreTransferPhase::Metadata),
+            TransferPhase::Metadata
+        );
+        assert_eq!(
+            ui_phase_for_core(Role::Receiver, CoreTransferPhase::Exporting),
+            TransferPhase::Exporting
+        );
+        assert_eq!(
+            ui_phase_for_core(Role::Sender, CoreTransferPhase::Connecting),
+            TransferPhase::Sharing
+        );
+        assert_eq!(
+            transfer_error_code_name(TransferErrorCode::TargetConflict),
+            "target_conflict"
+        );
     }
 
     #[test]

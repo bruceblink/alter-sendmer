@@ -24,6 +24,8 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 - File and folder sending through the native picker or drag-and-drop.
 - Ticket copy, paste, and save actions with explicit sender and receiver cancellation.
 - Live progress, folder file counts, completion summaries, failure recovery, and transfer history.
+- Versioned transfer events with session IDs, ordered phases, structured error summaries, and
+  retry-aware history diagnostics.
 - System, dark, and light themes plus a dropdown containing all 21 bundled languages.
 - Relay, retry, download-chunk, and persistent sender upload-limit preferences.
 - Diagnostics, signed update checks, and donation links.
@@ -53,8 +55,9 @@ cargo run
 ```
 
 The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It consumes the
-published [`sendmer`](https://crates.io/crates/sendmer) `0.7.0` crate through its opaque
-`SendHandle` lifecycle API, so a clean checkout does not depend on a sibling directory or Git revision.
+published [`sendmer`](https://crates.io/crates/sendmer) `0.8.0` crate through its opaque
+`SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
+sibling directory or Git revision.
 The optional upload limit is entered in MiB/s and converted to sendmer's shared payload bytes/s limit;
 `Unlimited` remains the default and the desktop client does not implement a separate limiter.
 
