@@ -234,6 +234,13 @@ try {
     Click-Control (Find-Control ([System.Windows.Automation.ControlType]::TabItem) 0)
     Resize-Client 760 560
     Save-WindowScreenshot 'acceptance-min-760x560-current.png'
+
+    Click-Control (Find-Control ([System.Windows.Automation.ControlType]::TabItem) 1)
+    Save-WindowScreenshot 'acceptance-receive-min-760x560-current.png'
+    Click-Control (Find-Control ([System.Windows.Automation.ControlType]::TabItem) 0)
+
+    Click-Control (Find-Control ([System.Windows.Automation.ControlType]::Button) 2)
+    Save-WindowScreenshot 'acceptance-settings-min-760x560-current.png'
 } finally {
     [AlterSendmeUiCaptureNative]::SetCursorPos($originalCursor.X, $originalCursor.Y) | Out-Null
 }

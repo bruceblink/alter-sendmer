@@ -204,6 +204,9 @@ mod tests {
             "preferences.uploadRate",
             "preferences.unlimited",
             "preferences.uploadRateInvalid",
+            "receiver.ticketLabel",
+            "receiver.pasteFromClipboard",
+            "receiver.startReceiving",
             "state.label",
         ];
         for locale in [Locale::SimplifiedChinese, Locale::TraditionalChinese] {
@@ -229,6 +232,9 @@ mod tests {
             "preferences.uploadRate",
             "preferences.unlimited",
             "preferences.uploadRateInvalid",
+            "receiver.ticketLabel",
+            "receiver.pasteFromClipboard",
+            "receiver.startReceiving",
             "state.label",
         ];
         for locale in Locale::all()
@@ -258,6 +264,9 @@ mod tests {
             "preferences.uploadRate",
             "preferences.unlimited",
             "preferences.uploadRateInvalid",
+            "receiver.ticketLabel",
+            "receiver.pasteFromClipboard",
+            "receiver.startReceiving",
             "sender.saveTicket",
             "receiver.invalidTicket",
             "transfer.tryAgain",

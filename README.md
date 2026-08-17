@@ -77,8 +77,9 @@ code-signing certificates can be added independently when available.
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
 - [Migration from the Tauri client](docs/MIGRATION.md)
 
-The repeatable Windows visual check is `scripts/capture-ui-acceptance.ps1`. It captures the default
-sender, receiver, transfer settings, minimum window, and complete language dropdown states.
+The repeatable Windows visual check is `scripts/capture-ui-acceptance.ps1`. It captures the sender,
+receiver, and transfer settings at both default and minimum window sizes, plus the complete language
+dropdown.
 
 ## Privacy and License
 
