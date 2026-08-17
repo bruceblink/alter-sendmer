@@ -66,7 +66,7 @@ The optional upload limit is entered in MiB/s and converted to sendmer's shared 
 ```powershell
 cargo install cargo-packager --version 0.11.8 --locked
 cargo packager --release --formats nsis --out-dir dist/windows-x86_64
-.\scripts\package-portable.ps1 -Version 0.3.0 -SkipBuild
+.\scripts\package-portable.ps1 -Version 0.4.0 -SkipBuild
 ```
 
 Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
