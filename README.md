@@ -84,8 +84,7 @@ code-signing certificates can be added independently when available.
 
 ## Documentation
 
-- [Design](docs/DESIGN.md)
-- [Development plan](docs/DEVELOPMENT_PLAN.md)
+- [Mainline Design and Development Plan](docs/MAINLINE.md)
 - [Migration from the Tauri client](docs/MIGRATION.md)
 
 The repeatable Windows visual check is `scripts/capture-ui-acceptance.ps1`. It captures the sender,
