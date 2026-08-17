@@ -52,6 +52,9 @@ jobs:
           toolchain: "1.95"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Test release note generator
+        if: runner.os == 'Linux'
+        run: python3 .github/scripts/test_generate_release_notes.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Check
