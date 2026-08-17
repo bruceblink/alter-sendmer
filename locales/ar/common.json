@@ -13,7 +13,7 @@
   "theme": { "label": "المظهر", "system": "النظام", "dark": "داكن", "light": "فاتح", "switchHint": "تبديل المظهر: {{theme}}" },
   "language": { "label": "اللغة", "select": "اختر اللغة" },
   "history": { "title": "سجل النقل", "empty": "لا توجد عمليات نقل بعد", "clear": "مسح السجل", "cleared": "تم مسح سجل النقل" },
-  "preferences": { "title": "إعدادات النقل", "relay": "وضع الترحيل", "retry": "حد إعادة المحاولة", "chunk": "حجم جزء التنزيل", "uploadRate": "حد الرفع", "unlimited": "غير محدود", "uploadRateInvalid": "أدخل عددًا صحيحًا من 1 إلى {{max}} MiB/s", "default": "تلقائي", "disabled": "اتصال مباشر فقط", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "إعدادات النقل", "relay": "وضع الترحيل", "retry": "حد إعادة المحاولة", "chunk": "حجم جزء التنزيل", "uploadRate": "حد الرفع", "unlimited": "غير محدود", "uploadRateInvalid": "أدخل عددًا صحيحًا من 1 إلى {{max}} MiB/s", "receiveCache": "ذاكرة استئناف التنزيل", "cacheOn": "مفعّل", "cacheOff": "معطّل", "cacheRetention": "مدة الاحتفاظ بذاكرة التخزين المؤقت الجديدة", "cacheDays": "{{count}} أيام", "pruneCache": "تنظيف ذاكرة التخزين المؤقت منتهية الصلاحية", "pruningCache": "جارٍ تنظيف ذاكرة التخزين المؤقت منتهية الصلاحية...", "cachePruned": "اكتمل تنظيف ذاكرة التخزين المؤقت: تمت إزالة {{removed}}، وتم الاحتفاظ بـ {{retained}}", "cachePruneFailed": "فشل تنظيف ذاكرة التخزين المؤقت", "default": "تلقائي", "disabled": "اتصال مباشر فقط", "value": "{{name}}: {{value}}" },
   "state": { "label": "الحالة: {{value}}", "idle": "خامل", "preparing": "جارٍ التحضير", "listening": "في انتظار الاتصال", "active": "جارٍ النقل", "stopping": "جارٍ الإيقاف", "completed": "مكتمل", "failed": "فشل" },
   "sender": {
     "title": "إرسال",

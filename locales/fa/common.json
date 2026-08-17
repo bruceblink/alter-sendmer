@@ -13,7 +13,7 @@
     "theme": { "label": "پوسته", "system": "سیستم", "dark": "تیره", "light": "روشن", "switchHint": "تغییر پوسته: {{theme}}" },
     "language": { "label": "زبان", "select": "انتخاب زبان" },
     "history": { "title": "تاریخچه انتقال", "empty": "هنوز انتقالی وجود ندارد", "clear": "پاک کردن تاریخچه", "cleared": "تاریخچه انتقال پاک شد" },
-    "preferences": { "title": "تنظیمات انتقال", "relay": "حالت رله", "retry": "حد تلاش مجدد", "chunk": "بخش دانلود", "uploadRate": "محدودیت بارگذاری", "unlimited": "نامحدود", "uploadRateInvalid": "یک عدد صحیح از 1 تا {{max}} MiB/s وارد کنید", "default": "خودکار", "disabled": "فقط اتصال مستقیم", "value": "{{name}}: {{value}}" },
+    "preferences": { "title": "تنظیمات انتقال", "relay": "حالت رله", "retry": "حد تلاش مجدد", "chunk": "بخش دانلود", "uploadRate": "محدودیت بارگذاری", "unlimited": "نامحدود", "uploadRateInvalid": "یک عدد صحیح از 1 تا {{max}} MiB/s وارد کنید", "receiveCache": "حافظهٔ ادامهٔ دانلود", "cacheOn": "روشن", "cacheOff": "خاموش", "cacheRetention": "مدت نگهداری حافظهٔ جدید", "cacheDays": "{{count}} روز", "pruneCache": "پاک‌سازی حافظهٔ منقضی", "pruningCache": "در حال پاک‌سازی حافظهٔ منقضی...", "cachePruned": "پاک‌سازی حافظه کامل شد: {{removed}} حذف و {{retained}} نگهداری شد", "cachePruneFailed": "پاک‌سازی حافظه ناموفق بود", "default": "خودکار", "disabled": "فقط اتصال مستقیم", "value": "{{name}}: {{value}}" },
     "state": { "label": "وضعیت: {{value}}", "idle": "بیکار", "preparing": "در حال آماده‌سازی", "listening": "در انتظار اتصال", "active": "در حال انتقال", "stopping": "در حال توقف", "completed": "تکمیل شد", "failed": "ناموفق" },
     "sender": {
       "title": "ارسال فایل",

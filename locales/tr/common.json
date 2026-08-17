@@ -13,7 +13,7 @@
   "theme": { "label": "Tema", "system": "Sistem", "dark": "Koyu", "light": "Açık", "switchHint": "Temayı değiştir: {{theme}}" },
   "language": { "label": "Dil", "select": "Dil seçin" },
   "history": { "title": "Aktarım geçmişi", "empty": "Henüz aktarım yok", "clear": "Geçmişi temizle", "cleared": "Aktarım geçmişi temizlendi" },
-  "preferences": { "title": "Aktarım ayarları", "relay": "Aktarma modu", "retry": "Yeniden deneme sınırı", "chunk": "İndirme parçası", "uploadRate": "Yükleme sınırı", "unlimited": "Sınırsız", "uploadRateInvalid": "1 ile {{max}} MiB/s arasında bir tam sayı girin", "default": "Otomatik", "disabled": "Yalnızca doğrudan", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Aktarım ayarları", "relay": "Aktarma modu", "retry": "Yeniden deneme sınırı", "chunk": "İndirme parçası", "uploadRate": "Yükleme sınırı", "unlimited": "Sınırsız", "uploadRateInvalid": "1 ile {{max}} MiB/s arasında bir tam sayı girin", "receiveCache": "Devam önbelleği", "cacheOn": "Açık", "cacheOff": "Kapalı", "cacheRetention": "Yeni önbellek saklama süresi", "cacheDays": "{{count}} gün", "pruneCache": "Süresi dolan önbelleği temizle", "pruningCache": "Süresi dolan önbellek temizleniyor...", "cachePruned": "Önbellek temizliği tamamlandı: {{removed}} kaldırıldı, {{retained}} tutuldu", "cachePruneFailed": "Önbellek temizliği başarısız", "default": "Otomatik", "disabled": "Yalnızca doğrudan", "value": "{{name}}: {{value}}" },
   "state": { "label": "Durum: {{value}}", "idle": "Boşta", "preparing": "Hazırlanıyor", "listening": "Bağlantı bekleniyor", "active": "Aktarılıyor", "stopping": "Durduruluyor", "completed": "Tamamlandı", "failed": "Başarısız" },
   "sender": {
     "title": "Gönder",

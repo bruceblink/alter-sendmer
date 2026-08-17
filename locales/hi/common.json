@@ -13,7 +13,7 @@
     "theme": { "label": "थीम", "system": "सिस्टम", "dark": "गहरा", "light": "हल्का", "switchHint": "थीम बदलें: {{theme}}" },
     "language": { "label": "भाषा", "select": "भाषा चुनें" },
     "history": { "title": "ट्रांसफर इतिहास", "empty": "अभी कोई ट्रांसफर नहीं", "clear": "इतिहास साफ़ करें", "cleared": "ट्रांसफर इतिहास साफ़ किया गया" },
-    "preferences": { "title": "ट्रांसफर सेटिंग्स", "relay": "रिले मोड", "retry": "पुनः प्रयास सीमा", "chunk": "डाउनलोड खंड", "uploadRate": "अपलोड सीमा", "unlimited": "असीमित", "uploadRateInvalid": "1 से {{max}} MiB/s तक पूर्णांक दर्ज करें", "default": "स्वचालित", "disabled": "केवल सीधा कनेक्शन", "value": "{{name}}: {{value}}" },
+    "preferences": { "title": "ट्रांसफर सेटिंग्स", "relay": "रिले मोड", "retry": "पुनः प्रयास सीमा", "chunk": "डाउनलोड खंड", "uploadRate": "अपलोड सीमा", "unlimited": "असीमित", "uploadRateInvalid": "1 से {{max}} MiB/s तक पूर्णांक दर्ज करें", "receiveCache": "फिर से शुरू करने की कैश", "cacheOn": "चालू", "cacheOff": "बंद", "cacheRetention": "नई कैश रखने की अवधि", "cacheDays": "{{count}} दिन", "pruneCache": "समाप्त कैश साफ़ करें", "pruningCache": "समाप्त कैश साफ़ की जा रही है...", "cachePruned": "कैश सफ़ाई पूरी: {{removed}} हटाए गए, {{retained}} रखे गए", "cachePruneFailed": "कैश साफ़ नहीं हो सकी", "default": "स्वचालित", "disabled": "केवल सीधा कनेक्शन", "value": "{{name}}: {{value}}" },
     "state": { "label": "स्थिति: {{value}}", "idle": "निष्क्रिय", "preparing": "तैयारी", "listening": "कनेक्शन की प्रतीक्षा", "active": "ट्रांसफर जारी", "stopping": "रोकना जारी", "completed": "पूर्ण", "failed": "विफल" },
     "sender": {
       "title": "भेजें",

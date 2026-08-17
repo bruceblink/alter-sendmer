@@ -25,6 +25,8 @@ use std::{
 const MAX_TICKET_LEN: usize = 16_384;
 const DEFAULT_UPLOAD_RATE_MIB_PER_SEC: u64 = 10;
 const MAX_UPLOAD_RATE_MIB_PER_SEC: u64 = 10_240;
+const DEFAULT_RECEIVE_CACHE_TTL_DAYS: u64 = 7;
+const RECEIVE_CACHE_TTL_PRESETS: [u64; 3] = [1, 7, 30];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -231,13 +233,25 @@ impl EventSessionState {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+const fn default_receive_cache_enabled() -> bool {
+    true
+}
+
+const fn default_receive_cache_ttl_days() -> u64 {
+    DEFAULT_RECEIVE_CACHE_TTL_DAYS
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Preferences {
     relay: String,
     retry_limit: u32,
     download_limit_mb: u32,
     #[serde(default)]
     max_upload_rate_mib_per_sec: Option<u64>,
+    #[serde(default = "default_receive_cache_enabled")]
+    receive_cache_enabled: bool,
+    #[serde(default = "default_receive_cache_ttl_days")]
+    receive_cache_ttl_days: u64,
 }
 
 /// Owns all user-facing state and serializes async transfer completions by generation.
@@ -285,6 +299,7 @@ pub struct AlterSendmeApp {
     preferences_open: bool,
     locale_menu_open: bool,
     preferences: Preferences,
+    cache_maintenance_running: bool,
     diagnostics: Option<String>,
     receiver_help_open: bool,
     completed_stopped: bool,
@@ -352,6 +367,7 @@ impl AlterSendmeApp {
             preferences_open: false,
             locale_menu_open: false,
             preferences,
+            cache_maintenance_running: false,
             diagnostics: None,
             receiver_help_open: false,
             completed_stopped: false,
@@ -450,6 +466,21 @@ impl AlterSendmeApp {
             .max_upload_rate_mib_per_sec
             .map(|rate| format!("{rate} MiB/s"))
             .unwrap_or_else(|| self.text("preferences.unlimited"))
+    }
+
+    fn receive_cache_state_label(&self) -> String {
+        if self.preferences.receive_cache_enabled {
+            self.text("preferences.cacheOn")
+        } else {
+            self.text("preferences.cacheOff")
+        }
+    }
+
+    fn receive_cache_ttl_label(&self) -> String {
+        self.text("preferences.cacheDays").replace(
+            "{{count}}",
+            &self.preferences.receive_cache_ttl_days.to_string(),
+        )
     }
 
     fn text(&self, key: &str) -> String {
@@ -669,13 +700,14 @@ impl AlterSendmeApp {
                 .or(self.sender_event_state.error_code.as_deref())
                 .unwrap_or("-");
             self.diagnostics = Some(format!(
-                "{} {} | {}={} | {}={} | sendmer=0.8 | sender_session={} | receiver_session={} | last_error={}",
+                "{} {} | {}={} | {}={} | sendmer=0.9 | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
                 self.text("diagnostics.client"),
                 env!("CARGO_PKG_VERSION"),
                 self.text("preferences.relay"),
                 self.relay_label(),
                 self.text("history.title"),
                 self.history.len(),
+                self.receive_cache_state_label(),
                 sender_session,
                 receiver_session,
                 last_error
@@ -818,6 +850,78 @@ impl AlterSendmeApp {
                 "{{value}}",
                 &format!("{} MB", self.preferences.download_limit_mb),
             );
+        cx.notify();
+    }
+
+    /// Enables or disables cross-process receive recovery without changing the save directory.
+    fn toggle_receive_cache(&mut self, cx: &mut Context<Self>) {
+        self.preferences.receive_cache_enabled = !self.preferences.receive_cache_enabled;
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.receiveCache"))
+            .replace("{{value}}", &self.receive_cache_state_label());
+        cx.notify();
+    }
+
+    /// Cycles the retention written into newly created cache entries.
+    fn cycle_receive_cache_ttl(&mut self, cx: &mut Context<Self>) {
+        let current = self.preferences.receive_cache_ttl_days;
+        let next_index = RECEIVE_CACHE_TTL_PRESETS
+            .iter()
+            .position(|days| *days == current)
+            .map_or(0, |index| (index + 1) % RECEIVE_CACHE_TTL_PRESETS.len());
+        self.preferences.receive_cache_ttl_days = RECEIVE_CACHE_TTL_PRESETS[next_index];
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.cacheRetention"))
+            .replace("{{value}}", &self.receive_cache_ttl_label());
+        cx.notify();
+    }
+
+    /// Removes only expired receive-cache entries while preserving active and unknown data.
+    fn prune_receive_cache(&mut self, cx: &mut Context<Self>) {
+        if self.cache_maintenance_running {
+            return;
+        }
+        self.cache_maintenance_running = true;
+        self.error = None;
+        self.status = self.text("preferences.pruningCache");
+        let root_dir = receive_cache_path();
+        let task = tokio::spawn(sendmer::prune_receive_cache(root_dir));
+        let app = cx.entity().downgrade();
+        cx.spawn(move |_, cx: &mut AsyncApp| {
+            let mut cx = cx.clone();
+            async move {
+                let result = task
+                    .await
+                    .map_err(|error| anyhow::anyhow!("cache maintenance task failed: {error}"))
+                    .and_then(|result| result);
+                let _ = app.update(&mut cx, |app, cx| {
+                    app.cache_maintenance_running = false;
+                    match result {
+                        Ok(report) => {
+                            app.status = app
+                                .text("preferences.cachePruned")
+                                .replace("{{removed}}", &report.removed_entries.to_string())
+                                .replace("{{retained}}", &report.retained_entries.to_string())
+                                .replace("{{active}}", &report.active_entries.to_string())
+                                .replace("{{unknown}}", &report.unknown_entries.to_string());
+                        }
+                        Err(error) => {
+                            app.error = Some(format!(
+                                "{}: {error}",
+                                app.text("preferences.cachePruneFailed")
+                            ));
+                            app.status = app.text("preferences.cachePruneFailed");
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
         cx.notify();
     }
 
@@ -1177,6 +1281,19 @@ impl AlterSendmeApp {
         if self.receive_phase != TransferPhase::Idle || self.receive_done.is_some() {
             return;
         }
+        let receive_cache = match transfer::receive_cache_options(
+            self.preferences.receive_cache_enabled,
+            receive_cache_path(),
+            self.preferences.receive_cache_ttl_days,
+        ) {
+            Ok(options) => options,
+            Err(error) => {
+                self.error = Some(error.to_string());
+                self.receive_phase = TransferPhase::Failed;
+                cx.notify();
+                return;
+            }
+        };
         self.generation += 1;
         let generation = self.generation;
         self.reset_event_state(Role::Receiver);
@@ -1206,8 +1323,11 @@ impl AlterSendmeApp {
                 output_dir,
                 events,
                 generation,
-                relay_mode,
-                retry_policy,
+                transfer::ReceiveTransferOptions {
+                    relay_mode,
+                    retry_policy,
+                    receive_cache,
+                },
                 cancel_receiver,
             )
             .await;
@@ -3126,7 +3246,38 @@ fn preferences_panel(
                     cx,
                     |app, cx| app.cycle_download_chunk(cx),
                 ))
+                .child(app.preference_button(
+                    "receive-cache",
+                    app.text("preferences.receiveCache"),
+                    app.receive_cache_state_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.toggle_receive_cache(cx),
+                ))
+                .child(app.preference_button(
+                    "receive-cache-ttl",
+                    app.text("preferences.cacheRetention"),
+                    app.receive_cache_ttl_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_receive_cache_ttl(cx),
+                ))
                 .child(upload_rate_control(app, colors, cx)),
+        )
+        .child(
+            app.secondary_button(
+                "prune-receive-cache",
+                if app.cache_maintenance_running {
+                    app.text("preferences.pruningCache")
+                } else {
+                    app.text("preferences.pruneCache")
+                },
+                !app.cache_maintenance_running,
+                colors,
+                cx,
+                |app, cx| app.prune_receive_cache(cx),
+            )
+            .w_full(),
         )
 }
 
@@ -3552,12 +3703,24 @@ fn preferences_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("alter-sendme-preferences.json"))
 }
 
+fn receive_cache_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.cache_dir().join("receive-cache"))
+        .unwrap_or_else(|| {
+            std::env::temp_dir()
+                .join("AlterSendme")
+                .join("receive-cache")
+        })
+}
+
 fn default_preferences() -> Preferences {
     Preferences {
         relay: "default".to_owned(),
         retry_limit: 3,
         download_limit_mb: 32,
         max_upload_rate_mib_per_sec: None,
+        receive_cache_enabled: default_receive_cache_enabled(),
+        receive_cache_ttl_days: default_receive_cache_ttl_days(),
     }
 }
 
@@ -3576,6 +3739,9 @@ fn parse_preferences(contents: &str) -> Option<Preferences> {
         None | Some(1..=MAX_UPLOAD_RATE_MIB_PER_SEC)
     ) {
         preferences.max_upload_rate_mib_per_sec = None;
+    }
+    if !RECEIVE_CACHE_TTL_PRESETS.contains(&preferences.receive_cache_ttl_days) {
+        preferences.receive_cache_ttl_days = DEFAULT_RECEIVE_CACHE_TTL_DAYS;
     }
     Some(preferences)
 }
@@ -3810,11 +3976,16 @@ mod history_tests {
     }
 
     #[test]
-    fn preferences_migrate_without_an_upload_rate() {
+    fn preferences_migrate_legacy_values_with_safe_cache_defaults() {
         let preferences =
             parse_preferences(r#"{"relay":"default","retry_limit":3,"download_limit_mb":32}"#)
                 .expect("legacy preferences should parse");
         assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
+        assert!(preferences.receive_cache_enabled);
+        assert_eq!(
+            preferences.receive_cache_ttl_days,
+            super::DEFAULT_RECEIVE_CACHE_TTL_DAYS
+        );
     }
 
     #[test]
@@ -3832,6 +4003,29 @@ mod history_tests {
             let preferences =
                 parse_preferences(&contents).expect("invalid upload rate should be sanitized");
             assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
+        }
+    }
+
+    #[test]
+    fn preferences_preserve_cache_settings_and_sanitize_unknown_retention() {
+        let configured = parse_preferences(
+            r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"receive_cache_enabled":false,"receive_cache_ttl_days":30}"#,
+        )
+        .expect("configured cache preferences should parse");
+        assert!(!configured.receive_cache_enabled);
+        assert_eq!(configured.receive_cache_ttl_days, 30);
+
+        for invalid in [0, 2, 31, u64::MAX] {
+            let contents = format!(
+                r#"{{"relay":"default","retry_limit":3,"download_limit_mb":32,"receive_cache_enabled":true,"receive_cache_ttl_days":{invalid}}}"#
+            );
+            let preferences =
+                parse_preferences(&contents).expect("invalid cache retention should be sanitized");
+            assert!(preferences.receive_cache_enabled);
+            assert_eq!(
+                preferences.receive_cache_ttl_days,
+                super::DEFAULT_RECEIVE_CACHE_TTL_DAYS
+            );
         }
     }
 

@@ -8,6 +8,7 @@
 | 桌面客户端 | AlterSendmer Desktop | 负责配置、状态投影、历史和平台交互 | 不复制传输协议或 limiter |
 | 传输适配器 | Transfer Adapter | 把桌面配置和事件映射到 sendmer 公开 API | 不是第二套传输实现 |
 | 上传速率上限 | Upload Rate Limit | 一个 sender 对所有接收方共享的 payload 上限 | 不是每个 peer 的独立配额或精确 QoS |
+| 持久接收缓存 | Persistent Receive Cache | 由核心传输层保存已验证接收数据，供失败或取消后的后续进程恢复 | 不是云端存储、永久传输会话或跨任意设备同步 |
 | 事件信封 | Event Envelope | 承载 schema 版本、会话 ID、序号、阶段和事件载荷 | 不参与传输控制流或替代函数返回值 |
 | 结构化错误 | Structured Transfer Error | 承载错误码、失败阶段、可重试属性和安全摘要 | 不是本地化文案或完整 anyhow 错误链 |
 
@@ -38,8 +39,8 @@
 GPUI Window
   -> AlterSendmeApp (唯一 UI 状态机)
      -> Transfer Adapter (异步 send/receive + cancel + options mapping)
-        -> sendmer 0.8.0::{send_handle, receive_with_cancellation} (P2P/TLS/QUIC)
-     -> Preferences (relay/retry/chunk/upload limit)
+        -> sendmer 0.9.0 (P2P/TLS/QUIC + Persistent Receive Cache)
+     -> Preferences (relay/retry/chunk/upload limit/receive cache)
      -> Platform adapters (path prompt, clipboard, reveal, theme)
      -> Localization catalog (compile-time tables generated from the bundled locales directory)
 ```
@@ -66,12 +67,17 @@ Failed 提供 Retry。
 ### 3.3 资源、取消与限速
 
 - 发送端保存 opaque `SendHandle`，直到用户停止共享或应用退出；router、store、temp tag
-  和临时目录的生命周期由 sendmer `0.8.0` 内部管理。
+  和临时目录的生命周期由 sendmer `0.9.0` 内部管理。
 - 接收端保存 watch cancellation sender，取消按钮发出优雅取消信号；sendmer 负责关闭 endpoint、
-  store 和临时目录，任务收尾后 GPUI 再统一清除状态。
+  store 和导出临时资源，任务收尾后 GPUI 再统一清除状态。启用持久接收缓存时，失败或取消会
+  保留已验证数据供后续进程恢复；成功导出后对应缓存条目由核心传输层删除。
 - 应用退出先停止发送 router，再等待接收任务结束。
 - 上传上限以 MiB/s 输入并持久化，传输适配器使用 checked multiplication 转换为
   `SendOptions::max_upload_rate_bytes_per_sec`；`None` 表示无限制。实际 limiter 只存在于核心传输层。
+- 持久接收缓存默认启用，新条目默认 TTL 为 7 天。桌面客户端只映射启用开关和 `1 / 7 / 30`
+  天选项，不自行读写缓存内容；TTL 变更只用于之后创建的新条目，不重写既有条目。
+- 自动清理和用户触发的清理都调用核心传输层能力，只删除 schema 已知、已过期且当前非活动的
+  条目；活动条目、未知 schema 条目和未过期条目必须保留。
 
 ## 4. GPUI 映射
 
@@ -92,8 +98,8 @@ Failed 提供 Retry。
 
 传输历史保存在系统应用数据目录的 `history.json`，只写入角色、路径、大小、耗时、平均速度、
 时间、结果和发送端票据；不会写入文件内容。主题选择保存在同一应用配置目录，relay 模式和接收
-重试/块大小在工作台偏好控件中切换；上传上限支持“不限速”或 `1..10240 MiB/s` 整数，
-所有配置均持久化并传给核心传输层。
+重试/块大小在工作台偏好控件中切换；上传上限支持“不限速”或 `1..10240 MiB/s` 整数，持久接收
+缓存支持关闭或为新条目选择 `1 / 7 / 30` 天 TTL，所有配置均持久化并传给核心传输层。
 
 ## 5. 视觉与交互
 
@@ -138,3 +144,5 @@ Apple Silicon 发布 app 更新归档和 DMG。三类更新归档由 cargo-packa
 发送和接收协议行为由 `sendmer` 的跨平台测试负责；GPUI 客户端测试聚焦状态机、格式化、事件
 归并和 generation 防竞态。CI 在 Windows、Ubuntu 和 macOS 分别执行 fmt、check、Clippy 与测试，
 发布工作流还必须在三个原生 runner 上实际产出安装包，避免用交叉编译代替平台打包验收。
+进程中断与重启测试只能证明确定性的连接恢复和缓存复用；除非另有独立测试设施，不得据此宣称
+已完成内核级丢包/时延故障注入，也不得把持久接收缓存描述为完整的跨设备永久续传。

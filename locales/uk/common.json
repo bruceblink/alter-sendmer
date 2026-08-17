@@ -13,7 +13,7 @@
     "theme": { "label": "Тема", "system": "Системна", "dark": "Темна", "light": "Світла", "switchHint": "Змінити тему: {{theme}}" },
     "language": { "label": "Мова", "select": "Виберіть мову" },
     "history": { "title": "Історія передавань", "empty": "Передавань ще немає", "clear": "Очистити історію", "cleared": "Історію передавань очищено" },
-    "preferences": { "title": "Налаштування передавання", "relay": "Режим ретрансляції", "retry": "Ліміт повторів", "chunk": "Блок завантаження", "uploadRate": "Обмеження відправлення", "unlimited": "Без обмежень", "uploadRateInvalid": "Введіть ціле число від 1 до {{max}} MiB/s", "default": "Автоматично", "disabled": "Лише пряме з'єднання", "value": "{{name}}: {{value}}" },
+    "preferences": { "title": "Налаштування передавання", "relay": "Режим ретрансляції", "retry": "Ліміт повторів", "chunk": "Блок завантаження", "uploadRate": "Обмеження відправлення", "unlimited": "Без обмежень", "uploadRateInvalid": "Введіть ціле число від 1 до {{max}} MiB/s", "receiveCache": "Кеш відновлення", "cacheOn": "Увімкнено", "cacheOff": "Вимкнено", "cacheRetention": "Термін зберігання нового кешу", "cacheDays": "{{count}} днів", "pruneCache": "Очистити прострочений кеш", "pruningCache": "Очищення простроченого кешу...", "cachePruned": "Очищення кешу завершено: видалено {{removed}}, збережено {{retained}}", "cachePruneFailed": "Не вдалося очистити кеш", "default": "Автоматично", "disabled": "Лише пряме з'єднання", "value": "{{name}}: {{value}}" },
     "state": { "label": "Стан: {{value}}", "idle": "Очікування", "preparing": "Підготовка", "listening": "Очікування з'єднання", "active": "Передавання", "stopping": "Зупинення", "completed": "Завершено", "failed": "Помилка" },
     "sender": {
       "title": "Надіслати",

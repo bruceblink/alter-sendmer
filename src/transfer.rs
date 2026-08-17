@@ -2,10 +2,10 @@
 
 use async_channel::Sender;
 use sendmer::{
-    AddrInfoOptions, AppHandle, EventEmitter, ReceiveOptions, RelayModeOption, SendOptions,
-    TransferEvent, send_handle,
+    AddrInfoOptions, AppHandle, EventEmitter, ReceiveCacheOptions, ReceiveOptions, RelayModeOption,
+    SendOptions, TransferEvent, send_handle,
 };
-use std::{num::NonZeroU64, path::PathBuf, sync::Arc};
+use std::{num::NonZeroU64, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::watch;
 
 const MEBIBYTE: u64 = 1024 * 1024;
@@ -15,6 +15,13 @@ const MEBIBYTE: u64 = 1024 * 1024;
 pub struct ChannelEventEmitter {
     pub sender: Sender<(u64, TransferEvent)>,
     pub generation: u64,
+}
+
+/// Groups receive-side transport policy so UI callers cannot misorder related arguments.
+pub(crate) struct ReceiveTransferOptions {
+    pub relay_mode: RelayModeOption,
+    pub retry_policy: sendmer::core::options::ReceiveRetryPolicy,
+    pub receive_cache: Option<ReceiveCacheOptions>,
 }
 
 impl EventEmitter for ChannelEventEmitter {
@@ -45,6 +52,26 @@ pub(crate) fn max_upload_rate_from_mib(
         .ok_or_else(|| anyhow::anyhow!("upload rate must be greater than zero"))
 }
 
+/// Maps the desktop cache preference to sendmer's persistent receive-cache contract.
+///
+/// Disabled caching returns `None`; enabled caching records the selected retention period
+/// in each new cache entry and validates the root before network setup begins.
+pub(crate) fn receive_cache_options(
+    enabled: bool,
+    root_dir: PathBuf,
+    ttl_days: u64,
+) -> anyhow::Result<Option<ReceiveCacheOptions>> {
+    if !enabled {
+        return Ok(None);
+    }
+    let ttl_seconds = ttl_days
+        .checked_mul(24 * 60 * 60)
+        .ok_or_else(|| anyhow::anyhow!("receive cache retention is too large"))?;
+    let options = ReceiveCacheOptions::new(root_dir).with_ttl(Duration::from_secs(ttl_seconds));
+    options.validate()?;
+    Ok(Some(options))
+}
+
 pub async fn start_send(
     path: PathBuf,
     sender: Sender<(u64, TransferEvent)>,
@@ -67,16 +94,16 @@ pub async fn start_receive(
     output_dir: PathBuf,
     sender: Sender<(u64, TransferEvent)>,
     generation: u64,
-    relay_mode: RelayModeOption,
-    retry_policy: sendmer::core::options::ReceiveRetryPolicy,
+    transfer_options: ReceiveTransferOptions,
     cancellation: watch::Receiver<bool>,
 ) -> anyhow::Result<sendmer::ReceiveResult> {
     let options = ReceiveOptions {
         output_dir: Some(output_dir),
-        relay_mode,
+        relay_mode: transfer_options.relay_mode,
         magic_ipv4_addr: None,
         magic_ipv6_addr: None,
-        retry_policy,
+        retry_policy: transfer_options.retry_policy,
+        receive_cache: transfer_options.receive_cache,
     };
     sendmer::receive_with_cancellation(
         ticket,
@@ -89,7 +116,10 @@ pub async fn start_receive(
 
 #[cfg(test)]
 mod tests {
-    use super::{MEBIBYTE, max_upload_rate_from_mib, start_receive, start_send};
+    use super::{
+        MEBIBYTE, ReceiveTransferOptions, max_upload_rate_from_mib, receive_cache_options,
+        start_receive, start_send,
+    };
     use async_channel::unbounded;
     use iroh::EndpointAddr;
     use iroh_blobs::{BlobFormat, Hash, ticket::BlobTicket};
@@ -98,6 +128,7 @@ mod tests {
     };
     use std::fs;
     use std::io::{Read, Write};
+    use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -172,17 +203,22 @@ mod tests {
         }
         let ticket = fs::read_to_string(std::env::var(TICKET_PATH).expect("receiver ticket path"))
             .expect("read sender ticket");
-        let output = std::env::var(OUTPUT_PATH).expect("receiver output path");
+        let output = PathBuf::from(std::env::var(OUTPUT_PATH).expect("receiver output path"));
+        let receive_cache = receive_cache_options(true, output.join(".receive-cache"), 7)
+            .expect("configure receive cache");
         let runtime = tokio::runtime::Runtime::new().expect("create receiver runtime");
         let (event_sender, event_receiver) = unbounded();
         let result = runtime
             .block_on(start_receive(
                 ticket,
-                output.into(),
+                output,
                 event_sender,
                 41,
-                RelayModeOption::Disabled,
-                Default::default(),
+                ReceiveTransferOptions {
+                    relay_mode: RelayModeOption::Disabled,
+                    retry_policy: Default::default(),
+                    receive_cache,
+                },
                 watch::channel(false).1,
             ))
             .expect("receive through adapter");
@@ -282,8 +318,11 @@ mod tests {
                 output_dir.path().to_path_buf(),
                 event_sender,
                 7,
-                RelayModeOption::Disabled,
-                Default::default(),
+                ReceiveTransferOptions {
+                    relay_mode: RelayModeOption::Disabled,
+                    retry_policy: Default::default(),
+                    receive_cache: None,
+                },
                 cancellation,
             ))
             .expect_err("pre-cancelled receive should stop before connecting");
@@ -305,6 +344,22 @@ mod tests {
             events.last().map(|(_, event)| &event.event),
             Some(TransferEventData::Cancelled)
         ));
+    }
+
+    #[test]
+    fn receive_cache_preference_maps_to_sendmer_options() {
+        let root = tempdir().expect("create cache root");
+        let disabled = receive_cache_options(false, root.path().join("disabled"), u64::MAX)
+            .expect("disabled cache should not validate unused settings");
+        assert!(disabled.is_none());
+
+        let cache_root = root.path().join("enabled");
+        let enabled = receive_cache_options(true, cache_root.clone(), 30)
+            .expect("enabled cache should map to sendmer options")
+            .expect("enabled cache options");
+        assert_eq!(enabled.root_dir, cache_root);
+        assert_eq!(enabled.ttl, Duration::from_secs(30 * 24 * 60 * 60));
+        assert!(receive_cache_options(true, root.path().join("invalid"), 0).is_err());
     }
 
     #[test]

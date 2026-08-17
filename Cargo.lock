@@ -2412,6 +2412,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs4"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e72ed92b67c146290f88e9c89d60ca163ea417a446f61ffd7b72df3e7f1dfd5"
+dependencies = [
+ "rustix 1.1.4",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6920,9 +6930,9 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "sendmer"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "226d0b82a4ac8529898f24d0ed7c00880ae761a4196f2b7a2531776b425da55c"
+checksum = "14cd997a9f7542ffd9a038a9757234201e8e3f21f0e22188f6137a035cb03b6b"
 dependencies = [
  "anyhow",
  "clap",
@@ -6930,6 +6940,7 @@ dependencies = [
  "crossterm",
  "data-encoding",
  "derive_more",
+ "fs4",
  "indicatif",
  "iroh",
  "iroh-blobs",

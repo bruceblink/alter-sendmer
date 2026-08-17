@@ -24,10 +24,13 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 - File and folder sending through the native picker or drag-and-drop.
 - Ticket copy, paste, and save actions with explicit sender and receiver cancellation.
 - Live progress, folder file counts, completion summaries, failure recovery, and transfer history.
+- Persistent receive caching is enabled by default: while the sender and ticket remain available,
+  verified data survives a failed or cancelled receive for reuse by a later process and is removed
+  after a successful export.
 - Versioned transfer events with session IDs, ordered phases, structured error summaries, and
   retry-aware history diagnostics.
 - System, dark, and light themes plus a dropdown containing all 21 bundled languages.
-- Relay, retry, download-chunk, and persistent sender upload-limit preferences.
+- Relay, retry, download-chunk, sender upload-limit, and receive-cache retention preferences.
 - Diagnostics, signed update checks, and donation links.
 - One native Rust process with no Node.js, Tauri, React, or WebView runtime.
 
@@ -55,11 +58,16 @@ cargo run
 ```
 
 The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It consumes the
-published [`sendmer`](https://crates.io/crates/sendmer) `0.8.0` crate through its opaque
+published [`sendmer`](https://crates.io/crates/sendmer) `0.9.0` crate through its opaque
 `SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
 sibling directory or Git revision.
 The optional upload limit is entered in MiB/s and converted to sendmer's shared payload bytes/s limit;
 `Unlimited` remains the default and the desktop client does not implement a separate limiter.
+The receive cache is also implemented by sendmer rather than the desktop client. It is enabled by
+default with a seven-day TTL; preferences can disable it or select a 1-, 7-, or 30-day TTL for new
+entries. Cleanup removes only expired, inactive entries with a recognized cache schema, preserving
+active, unknown, and unexpired data. This recovery path does not promise permanent cross-device
+resume and is not evidence of kernel-level packet-loss or latency fault injection.
 
 ## Packaging
 

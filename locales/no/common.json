@@ -13,7 +13,7 @@
   "theme": { "label": "Utseende", "system": "System", "dark": "Mørk", "light": "Lys", "switchHint": "Bytt utseende: {{theme}}" },
   "language": { "label": "Språk", "select": "Velg språk" },
   "history": { "title": "Overføringshistorikk", "empty": "Ingen overføringer ennå", "clear": "Tøm historikk", "cleared": "Overføringshistorikken er tømt" },
-  "preferences": { "title": "Overføringsinnstillinger", "relay": "Relay-modus", "retry": "Grense for nye forsøk", "chunk": "Nedlastingsblokk", "uploadRate": "Opplastingsgrense", "unlimited": "Ubegrenset", "uploadRateInvalid": "Angi et heltall fra 1 til {{max}} MiB/s", "default": "Automatisk", "disabled": "Bare direkte", "value": "{{name}}: {{value}}" },
+  "preferences": { "title": "Overføringsinnstillinger", "relay": "Relay-modus", "retry": "Grense for nye forsøk", "chunk": "Nedlastingsblokk", "uploadRate": "Opplastingsgrense", "unlimited": "Ubegrenset", "uploadRateInvalid": "Angi et heltall fra 1 til {{max}} MiB/s", "receiveCache": "Gjenopptakingsbuffer", "cacheOn": "På", "cacheOff": "Av", "cacheRetention": "Lagringstid for ny buffer", "cacheDays": "{{count}} dager", "pruneCache": "Tøm utløpt buffer", "pruningCache": "Tømmer utløpt buffer...", "cachePruned": "Bufferopprydding fullført: {{removed}} fjernet, {{retained}} beholdt", "cachePruneFailed": "Bufferopprydding mislyktes", "default": "Automatisk", "disabled": "Bare direkte", "value": "{{name}}: {{value}}" },
   "state": { "label": "Status: {{value}}", "idle": "Inaktiv", "preparing": "Forbereder", "listening": "Venter på tilkobling", "active": "Overfører", "stopping": "Stopper", "completed": "Fullført", "failed": "Mislyktes" },
   "sender": {
     "title": "Send",
