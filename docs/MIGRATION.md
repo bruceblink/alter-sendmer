@@ -41,7 +41,8 @@ application-data directories.
 ## Maintainer cutover checklist
 
 - The active repository passes format, check, Clippy, and test gates on its pinned toolchain.
-- A tagged release contains Windows, Linux, and macOS packages, `SHA256SUMS`, signatures, and `latest.json`.
+- A tagged release contains Windows, Linux, and macOS packages, `SHA256SUMS`, minisign signatures,
+  `latest.json`, an SPDX SBOM, Sigstore bundles, and a GitHub provenance attestation.
 - The release manifest and in-app update endpoints target `bruceblink/alter-sendmer`.
 - Desktop screenshots cover the default window, minimum window, receive tab, and language dropdown.
 - The legacy README redirects users before `bruceblink/alter-sendme` is archived.

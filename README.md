@@ -40,8 +40,9 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 
 Download the Windows NSIS installer or portable ZIP, Linux AppImage or DEB, and macOS DMG from
 [GitHub Releases](https://github.com/bruceblink/alter-sendmer/releases/latest). `SHA256SUMS` covers
-the published packages. The application verifies the minisign signature embedded in `latest.json`
-before installing an update; update bundles are selected by operating system and architecture.
+the published packages and supply-chain evidence. Releases also contain an SPDX SBOM, Sigstore
+signature bundles, and a GitHub provenance attestation; the application verifies the minisign
+signature embedded in `latest.json` before installing an update.
 
 ## Development
 
@@ -80,9 +81,10 @@ cargo packager --release --formats nsis --out-dir dist/windows-x86_64
 ```
 
 Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
-all three operating-system packages, generate `latest.json` and `SHA256SUMS`, then publish the
-assets. The minisign private key is stored only in GitHub Actions secrets; trusted Windows and macOS
-code-signing certificates can be added independently when available.
+all three operating-system packages, generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore
+bundles, and a GitHub provenance attestation, then publish the complete asset groups. The minisign
+private key is stored only in GitHub Actions secrets; trusted Windows and macOS code-signing
+certificates can be added independently when available.
 
 ## Documentation
 

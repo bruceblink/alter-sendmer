@@ -125,7 +125,7 @@ Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Com
 失败或取消保留已验证范围，成功导出删除对应条目。TTL 变更只影响之后创建的新条目；prune
 保留活动、未过期、损坏和未来 schema 条目。
 
-### 5.2 事件与错误投影
+### 5.2 事件与错误映射
 
 传输适配器实现 `sendmer::EventEmitter`，经无锁 channel 把事件交给 UI。消费者先校验
 `schema_version`，再确认同一 `session_id` 和严格递增 `sequence`，最后按 `phase` 与载荷更新状态。
@@ -168,8 +168,9 @@ Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Com
 时才展示最新状态或错误。
 
 CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Release 必须在三个原生
-runner 上构建并上传资产，不能用交叉编译代替平台打包验收。Release 正文由 tag 提交范围生成，
-重跑同一 tag 时幂等更新。
+runner 上构建并上传资产，不能用交叉编译代替平台打包验收。每个发布批次同时上传包、
+`SHA256SUMS`、SPDX SBOM、Sigstore bundle 和 GitHub provenance attestation；签名与证明校验
+失败时停止发布。Release 正文由 tag 提交范围生成，重跑同一 tag 时幂等更新。
 
 ## 8. 已完成阶段与版本矩阵
 

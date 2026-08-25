@@ -111,6 +111,10 @@ jobs:
     needs: package
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish && inputs.tag != '')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
@@ -122,6 +126,91 @@ jobs:
         with:
           pattern: release-*
           path: dist
+      - name: Collect release subjects
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          SUBJECTS_DIR="$RUNNER_TEMP/alter-sendmer-subjects"
+          rm -rf "$SUBJECTS_DIR"
+          mkdir -p "$SUBJECTS_DIR"
+          find dist -type f \( \
+            -name '*.exe' -o \
+            -name '*.zip' -o \
+            -name '*.AppImage' -o \
+            -name '*.deb' -o \
+            -name '*.dmg' -o \
+            -name '*.app.tar.gz' \
+          \) -print0 | while IFS= read -r -d '' asset; do
+            cp "$asset" "$SUBJECTS_DIR/$(basename "$asset")"
+          done
+          mapfile -t subjects < <(find "$SUBJECTS_DIR" -type f -print | sort)
+          if [ "${#subjects[@]}" -eq 0 ]; then
+            echo "No release subjects were downloaded for ${RELEASE_TAG}."
+            exit 1
+          fi
+          printf 'Collected %s release subjects for %s\n' "${#subjects[@]}" "$RELEASE_TAG"
+          printf '%s\n' "${subjects[@]}"
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ${{ runner.temp }}/alter-sendmer-subjects
+          format: spdx-json
+          output-file: dist/AlterSendmer-${{ env.RELEASE_TAG }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+      - name: Sign and verify release subjects and SBOM
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          IDENTITY_REGEX="^https://github[.]com/${GITHUB_REPOSITORY}/[.]github/workflows/release[.]yml@refs/tags/${RELEASE_TAG}$"
+          SBOM="dist/AlterSendmer-${RELEASE_TAG}.spdx.json"
+          test -s "$SBOM"
+          cosign sign-blob "$SBOM" --bundle "${SBOM}.sigstore.json" --yes
+          cosign verify-blob "$SBOM" \
+            --bundle "${SBOM}.sigstore.json" \
+            --certificate-identity-regexp "$IDENTITY_REGEX" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          while IFS= read -r -d '' subject; do
+            bundle="${subject}.sigstore.json"
+            cosign sign-blob "$subject" --bundle "$bundle" --yes
+            cosign verify-blob "$subject" \
+              --bundle "$bundle" \
+              --certificate-identity-regexp "$IDENTITY_REGEX" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+            cp "$bundle" "dist/$(basename "$bundle")"
+            test -s "dist/$(basename "$bundle")"
+          done < <(find "$RUNNER_TEMP/alter-sendmer-subjects" -type f -print0 | sort -z)
+      - name: Generate and verify release provenance
+        id: provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/alter-sendmer-subjects/*
+      - name: Store provenance bundle
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test -s "$PROVENANCE_BUNDLE"
+          PROVENANCE_ASSET="dist/AlterSendmer-${RELEASE_TAG}.attestation.json"
+          cp "$PROVENANCE_BUNDLE" "$PROVENANCE_ASSET"
+          test -s "$PROVENANCE_ASSET"
+          while IFS= read -r -d '' subject; do
+            gh attestation verify "$subject" \
+              --repo "$GITHUB_REPOSITORY" \
+              --bundle "$PROVENANCE_ASSET" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "refs/tags/${RELEASE_TAG}"
+          done < <(find "$RUNNER_TEMP/alter-sendmer-subjects" -type f -print0 | sort -z)
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -152,5 +241,8 @@ jobs:
             dist/**/*.app.tar.gz
             dist/**/*.sig
             dist/**/*.sha256
+            dist/**/*.spdx.json
+            dist/**/*.sigstore.json
+            dist/**/*.attestation.json
             dist/latest.json
             dist/SHA256SUMS
