@@ -270,6 +270,8 @@ struct Preferences {
     max_receivers: Option<u64>,
     #[serde(default)]
     session_lifetime_seconds: Option<u64>,
+    #[serde(default)]
+    manifest_mode: bool,
     #[serde(default = "default_receive_cache_enabled")]
     receive_cache_enabled: bool,
     #[serde(default = "default_receive_cache_ttl_days")]
@@ -525,6 +527,14 @@ impl AlterSendmeApp {
             Some(seconds) => self
                 .text("preferences.sessionMinutes")
                 .replace("{{count}}", &(seconds / 60).to_string()),
+        }
+    }
+
+    fn manifest_mode_label(&self) -> String {
+        if self.preferences.manifest_mode {
+            self.text("preferences.manifestOn")
+        } else {
+            self.text("preferences.manifestOff")
         }
     }
 
@@ -885,6 +895,17 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Toggles the explicit TM1 sender mode; legacy Collection V0 remains the default.
+    fn toggle_manifest_mode(&mut self, cx: &mut Context<Self>) {
+        self.preferences.manifest_mode = !self.preferences.manifest_mode;
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.manifest"))
+            .replace("{{value}}", &self.manifest_mode_label());
+        cx.notify();
+    }
+
     /// Selects a locale from the dropdown and persists it for the next launch.
     fn select_locale(&mut self, locale: Locale, cx: &mut Context<Self>) {
         self.locale = locale;
@@ -1145,10 +1166,13 @@ impl AlterSendmeApp {
             path,
             events,
             generation,
-            relay_mode,
-            self.preferences.max_upload_rate_mib_per_sec,
-            self.preferences.max_receivers,
-            self.preferences.session_lifetime_seconds,
+            transfer::SendTransferOptions {
+                relay_mode,
+                max_upload_rate_mib_per_sec: self.preferences.max_upload_rate_mib_per_sec,
+                max_receivers: self.preferences.max_receivers,
+                session_lifetime_seconds: self.preferences.session_lifetime_seconds,
+                manifest_mode: self.preferences.manifest_mode,
+            },
         ));
         self.send_abort = Some(task.abort_handle());
         let app = cx.entity().downgrade();
@@ -3360,6 +3384,14 @@ fn preferences_panel(
                     |app, cx| app.cycle_session_lifetime(cx),
                 ))
                 .child(app.preference_button(
+                    "manifest-mode",
+                    app.text("preferences.manifest"),
+                    app.manifest_mode_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.toggle_manifest_mode(cx),
+                ))
+                .child(app.preference_button(
                     "receive-cache",
                     app.text("preferences.receiveCache"),
                     app.receive_cache_state_label(),
@@ -3834,6 +3866,7 @@ fn default_preferences() -> Preferences {
         max_upload_rate_mib_per_sec: None,
         max_receivers: None,
         session_lifetime_seconds: None,
+        manifest_mode: false,
         receive_cache_enabled: default_receive_cache_enabled(),
         receive_cache_ttl_days: default_receive_cache_ttl_days(),
     }
@@ -4105,6 +4138,7 @@ mod history_tests {
         assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
         assert_eq!(preferences.max_receivers, None);
         assert_eq!(preferences.session_lifetime_seconds, None);
+        assert!(!preferences.manifest_mode);
         assert!(preferences.receive_cache_enabled);
         assert_eq!(
             preferences.receive_cache_ttl_days,
@@ -4138,6 +4172,12 @@ mod history_tests {
         .expect("v0.10 sender preferences should parse");
         assert_eq!(configured.max_receivers, Some(4));
         assert_eq!(configured.session_lifetime_seconds, Some(900));
+
+        let manifest = parse_preferences(
+            r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"manifest_mode":true}"#,
+        )
+        .expect("manifest preference should parse");
+        assert!(manifest.manifest_mode);
 
         let sanitized = parse_preferences(
             r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"max_receivers":3,"session_lifetime_seconds":123}"#,

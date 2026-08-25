@@ -24,6 +24,15 @@ pub(crate) struct ReceiveTransferOptions {
     pub receive_cache: Option<ReceiveCacheOptions>,
 }
 
+/// Groups sender-side policy so UI callers pass one coherent public API mapping.
+pub(crate) struct SendTransferOptions {
+    pub relay_mode: RelayModeOption,
+    pub max_upload_rate_mib_per_sec: Option<u64>,
+    pub max_receivers: Option<u64>,
+    pub session_lifetime_seconds: Option<u64>,
+    pub manifest_mode: bool,
+}
+
 impl EventEmitter for ChannelEventEmitter {
     fn emit(&self, event: &TransferEvent) {
         let _ = self.sender.try_send((self.generation, event.clone()));
@@ -100,23 +109,22 @@ pub async fn start_send(
     path: PathBuf,
     sender: Sender<(u64, TransferEvent)>,
     generation: u64,
-    relay_mode: RelayModeOption,
-    max_upload_rate_mib_per_sec: Option<u64>,
-    max_receivers: Option<u64>,
-    session_lifetime_seconds: Option<u64>,
+    transfer_options: SendTransferOptions,
 ) -> anyhow::Result<sendmer::SendHandle> {
     let options = SendOptions {
-        relay_mode,
+        relay_mode: transfer_options.relay_mode,
         ticket_type: AddrInfoOptions::RelayAndAddresses,
-        manifest_mode: false,
+        manifest_mode: transfer_options.manifest_mode,
         magic_ipv4_addr: None,
         magic_ipv6_addr: None,
-        max_upload_rate_bytes_per_sec: max_upload_rate_from_mib(max_upload_rate_mib_per_sec)?,
-        max_receivers: max_receivers_from_preference(max_receivers)?,
+        max_upload_rate_bytes_per_sec: max_upload_rate_from_mib(
+            transfer_options.max_upload_rate_mib_per_sec,
+        )?,
+        max_receivers: max_receivers_from_preference(transfer_options.max_receivers)?,
         max_files: None,
         max_total_size_bytes: None,
         max_import_memory_bytes: None,
-        session_lifetime: session_lifetime_from_seconds(session_lifetime_seconds)?,
+        session_lifetime: session_lifetime_from_seconds(transfer_options.session_lifetime_seconds)?,
     };
     send_handle(path, options, emitter(sender, generation)).await
 }
@@ -149,8 +157,9 @@ pub async fn start_receive(
 #[cfg(test)]
 mod tests {
     use super::{
-        MEBIBYTE, ReceiveTransferOptions, max_receivers_from_preference, max_upload_rate_from_mib,
-        receive_cache_options, session_lifetime_from_seconds, start_receive, start_send,
+        MEBIBYTE, ReceiveTransferOptions, SendTransferOptions, max_receivers_from_preference,
+        max_upload_rate_from_mib, receive_cache_options, session_lifetime_from_seconds,
+        start_receive, start_send,
     };
     use async_channel::unbounded;
     use iroh::EndpointAddr;
@@ -171,6 +180,7 @@ mod tests {
     const SOURCE_PATH: &str = "ALTER_SENDME_TRANSFER_SOURCE";
     const TICKET_PATH: &str = "ALTER_SENDME_TRANSFER_TICKET";
     const OUTPUT_PATH: &str = "ALTER_SENDME_TRANSFER_OUTPUT";
+    const MANIFEST_MODE: &str = "ALTER_SENDME_TRANSFER_MANIFEST";
 
     /// Verifies the stable event envelope before the GPUI state machine consumes it.
     fn assert_event_contract(events: &[(u64, TransferEvent)], role: Role) {
@@ -194,6 +204,7 @@ mod tests {
         }
         let source = std::env::var(SOURCE_PATH).expect("sender source path");
         let ticket_path = std::env::var(TICKET_PATH).expect("sender ticket path");
+        let manifest_mode = std::env::var(MANIFEST_MODE).ok().as_deref() == Some("1");
         let runtime = tokio::runtime::Runtime::new().expect("create sender runtime");
         let (event_sender, event_receiver) = unbounded();
         let result = runtime
@@ -201,10 +212,13 @@ mod tests {
                 source.into(),
                 event_sender,
                 41,
-                RelayModeOption::Disabled,
-                None,
-                None,
-                None,
+                SendTransferOptions {
+                    relay_mode: RelayModeOption::Disabled,
+                    max_upload_rate_mib_per_sec: None,
+                    max_receivers: None,
+                    session_lifetime_seconds: None,
+                    manifest_mode,
+                },
             ))
             .expect("start adapter sender");
         fs::write(ticket_path, result.ticket().to_string()).expect("publish sender ticket");
@@ -329,6 +343,97 @@ mod tests {
 
         let received = output_dir.path().join("adapter-e2e.txt");
         assert_eq!(fs::read(received).expect("read received file"), contents);
+    }
+
+    /// Exercises the public TM1 switch across processes and verifies that an empty directory
+    /// and a supported file timestamp survive without the desktop reading manifest data.
+    #[test]
+    fn adapter_transfers_manifest_directory_with_empty_child() {
+        let source_dir = tempdir().expect("create source directory");
+        let output_dir = tempdir().expect("create output directory");
+        let source_root = source_dir.path().join("manifest-share");
+        let empty_child = source_root.join("empty-child");
+        let source_file = source_root.join("readme.txt");
+        fs::create_dir_all(&empty_child).expect("create empty manifest child");
+        fs::write(&source_file, b"manifest adapter fixture").expect("write manifest fixture");
+        let source_time = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&source_file)
+            .expect("open manifest fixture")
+            .set_modified(source_time)
+            .expect("set manifest fixture timestamp");
+
+        let ticket_path = output_dir.path().join("manifest-ticket.txt");
+        let test_binary = std::env::current_exe().expect("locate test binary");
+        let mut sender = Command::new(&test_binary)
+            .args(["--exact", "transfer::tests::worker_sender", "--nocapture"])
+            .env(WORKER_MODE, "sender")
+            .env(SOURCE_PATH, &source_root)
+            .env(TICKET_PATH, &ticket_path)
+            .env(MANIFEST_MODE, "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("spawn manifest sender worker");
+
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !ticket_path.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "manifest sender did not publish a ticket"
+            );
+            if let Some(status) = sender.try_wait().expect("poll manifest sender worker") {
+                panic!("manifest sender worker exited early: {status}");
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+
+        let receiver_status = Command::new(&test_binary)
+            .args(["--exact", "transfer::tests::worker_receiver", "--nocapture"])
+            .env(WORKER_MODE, "receiver")
+            .env(TICKET_PATH, &ticket_path)
+            .env(OUTPUT_PATH, output_dir.path())
+            .status()
+            .expect("run manifest receiver worker");
+        assert!(
+            receiver_status.success(),
+            "manifest receiver worker failed: {receiver_status}"
+        );
+
+        sender
+            .stdin
+            .take()
+            .expect("manifest sender worker stdin")
+            .write_all(b"manifest receiver finished\n")
+            .expect("signal manifest sender worker");
+        let sender_status = sender.wait().expect("wait for manifest sender worker");
+        assert!(
+            sender_status.success(),
+            "manifest sender worker failed: {sender_status}"
+        );
+
+        let received_root = output_dir.path().join("manifest-share");
+        assert_eq!(
+            fs::read(received_root.join("readme.txt")).expect("read received manifest file"),
+            b"manifest adapter fixture"
+        );
+        assert!(
+            received_root.join("empty-child").is_dir(),
+            "TM1 should materialize the empty child directory"
+        );
+        let received_time = fs::metadata(received_root.join("readme.txt"))
+            .expect("stat received manifest file")
+            .modified()
+            .expect("read received manifest timestamp");
+        assert_eq!(
+            received_time
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .expect("received timestamp should be after epoch")
+                .as_secs(),
+            1_700_000_000
+        );
     }
 
     /// Verifies that a caller cancellation reaches sendmer before a receive can connect.
