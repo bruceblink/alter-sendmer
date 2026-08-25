@@ -56,6 +56,9 @@ enum TransferPhase {
     Failed,
 }
 
+// Keep the diagnostic contract explicit because Rust does not expose dependency versions at runtime.
+const SENDMER_VERSION: &str = "0.10.0";
+
 impl TransferPhase {
     fn is_active(self) -> bool {
         matches!(
@@ -700,13 +703,14 @@ impl AlterSendmeApp {
                 .or(self.sender_event_state.error_code.as_deref())
                 .unwrap_or("-");
             self.diagnostics = Some(format!(
-                "{} {} | {}={} | {}={} | sendmer=0.9 | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
+                "{} {} | {}={} | {}={} | sendmer={} | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
                 self.text("diagnostics.client"),
                 env!("CARGO_PKG_VERSION"),
                 self.text("preferences.relay"),
                 self.relay_label(),
                 self.text("history.title"),
                 self.history.len(),
+                SENDMER_VERSION,
                 self.receive_cache_state_label(),
                 sender_session,
                 receiver_session,

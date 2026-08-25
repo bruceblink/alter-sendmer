@@ -1,7 +1,7 @@
 # AlterSendmer 主线设计与开发计划
 
 本文是 AlterSendmer 唯一的主线设计与开发计划。它合并了原 GPUI 设计说明与阶段开发计划，
-并与 `sendmer v0.9.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
+并与 `sendmer v0.10.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
 当前架构或未来计划。
 
 ## 1. 术语表与命名约定
@@ -24,7 +24,8 @@
 
 ## 2. 产品边界与当前基线
 
-当前发布基线是 `AlterSendmer v0.5.0`，通过 crates.io 依赖 `sendmer = "0.9.0"`。桌面客户端
+当前正式发布基线是 `AlterSendmer v0.5.0`（使用 `sendmer = "0.9.0"`）；当前工作树已切换到
+crates.io 的 `sendmer = "0.10.0"`，用于下一桌面版本适配。桌面客户端
 提供不依赖账号、服务器或云端存储的原生点对点文件传输。传输票据是 bearer capability：
 拿到有效票据即可接收，因此界面和文档必须提醒用户只通过可信渠道分享。
 
@@ -54,7 +55,7 @@ flowchart LR
         EVENT["Event Projection"]
     end
 
-    CORE["sendmer 0.9.0\nPublic API"]
+    CORE["sendmer 0.10.0\nPublic API"]
     NET["iroh / TLS / QUIC / Relay"]
     PEER["Remote sendmer peer"]
     FS["Local Filesystem"]
@@ -176,6 +177,7 @@ runner 上构建并上传资产，不能用交叉编译代替平台打包验收�
 | `v0.3.0` | `0.7.0` | opaque `SendHandle`、上传速率配置、接收页初次层级收敛 |
 | `v0.4.0` | `0.8.0` | 版本化事件、结构化错误、历史诊断字段和三平台发布 |
 | `v0.5.0` | `0.9.0` | 三步接收工作流、持久接收缓存开关/TTL/prune、完整本地化与视觉验收 |
+| `v0.6.0`（计划） | `0.10.0` | 会话生命周期、接收方上限、TM1 选择与兼容回归，待本阶段验收后发布 |
 
 `v0.5.0` 是本阶段收尾版本。它只消费 sendmer 已发布能力，不引入账号、云存储、后台同步、
 内核级网络故障注入或跨设备永久续传。

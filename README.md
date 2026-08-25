@@ -58,7 +58,7 @@ cargo run
 ```
 
 The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It consumes the
-published [`sendmer`](https://crates.io/crates/sendmer) `0.9.0` crate through its opaque
+published [`sendmer`](https://crates.io/crates/sendmer) `0.10.0` crate through its opaque
 `SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
 sibling directory or Git revision.
 The optional upload limit is entered in MiB/s and converted to sendmer's shared payload bytes/s limit;

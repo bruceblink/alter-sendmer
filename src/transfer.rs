@@ -82,9 +82,15 @@ pub async fn start_send(
     let options = SendOptions {
         relay_mode,
         ticket_type: AddrInfoOptions::RelayAndAddresses,
+        manifest_mode: false,
         magic_ipv4_addr: None,
         magic_ipv6_addr: None,
         max_upload_rate_bytes_per_sec: max_upload_rate_from_mib(max_upload_rate_mib_per_sec)?,
+        max_receivers: None,
+        max_files: None,
+        max_total_size_bytes: None,
+        max_import_memory_bytes: None,
+        session_lifetime: None,
     };
     send_handle(path, options, emitter(sender, generation)).await
 }
