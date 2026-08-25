@@ -11,8 +11,8 @@ use gpui::{
     Window, WindowAppearance, div, px, relative, rgb, svg,
 };
 use sendmer::{
-    Role, SendHandle, TRANSFER_EVENT_SCHEMA_VERSION, TransferError, TransferErrorCode,
-    TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
+    Role, SendHandle, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
+    TransferErrorCode, TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,6 +27,9 @@ const DEFAULT_UPLOAD_RATE_MIB_PER_SEC: u64 = 10;
 const MAX_UPLOAD_RATE_MIB_PER_SEC: u64 = 10_240;
 const DEFAULT_RECEIVE_CACHE_TTL_DAYS: u64 = 7;
 const RECEIVE_CACHE_TTL_PRESETS: [u64; 3] = [1, 7, 30];
+const MAX_RECEIVER_PRESETS: [Option<u64>; 5] = [None, Some(1), Some(2), Some(4), Some(8)];
+const SESSION_LIFETIME_PRESETS: [Option<u64>; 4] =
+    [None, Some(15 * 60), Some(60 * 60), Some(8 * 60 * 60)];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tab {
@@ -130,6 +133,18 @@ fn transfer_phase_name(phase: CoreTransferPhase) -> &'static str {
         CoreTransferPhase::Transferring => "transferring",
         CoreTransferPhase::Exporting => "exporting",
         CoreTransferPhase::Finalizing => "finalizing",
+    }
+}
+
+/// Maps the public sender terminal error to the lifecycle status exposed by sendmer.
+fn sender_status_for_failure(error: &TransferError) -> SenderTransferStatus {
+    if error.code == TransferErrorCode::Timeout
+        && error.phase == CoreTransferPhase::Finalizing
+        && !error.retryable
+    {
+        SenderTransferStatus::Expired
+    } else {
+        SenderTransferStatus::Aborted
     }
 }
 
@@ -251,6 +266,10 @@ struct Preferences {
     download_limit_mb: u32,
     #[serde(default)]
     max_upload_rate_mib_per_sec: Option<u64>,
+    #[serde(default)]
+    max_receivers: Option<u64>,
+    #[serde(default)]
+    session_lifetime_seconds: Option<u64>,
     #[serde(default = "default_receive_cache_enabled")]
     receive_cache_enabled: bool,
     #[serde(default = "default_receive_cache_ttl_days")]
@@ -308,6 +327,7 @@ pub struct AlterSendmeApp {
     completed_stopped: bool,
     sender_event_state: EventSessionState,
     receiver_event_state: EventSessionState,
+    sender_status: SenderTransferStatus,
 }
 
 impl AlterSendmeApp {
@@ -376,6 +396,7 @@ impl AlterSendmeApp {
             completed_stopped: false,
             sender_event_state: EventSessionState::default(),
             receiver_event_state: EventSessionState::default(),
+            sender_status: SenderTransferStatus::Idle,
         };
         let entity = cx.entity().downgrade();
         cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
@@ -484,6 +505,27 @@ impl AlterSendmeApp {
             "{{count}}",
             &self.preferences.receive_cache_ttl_days.to_string(),
         )
+    }
+
+    fn max_receivers_label(&self) -> String {
+        match self.preferences.max_receivers {
+            Some(count) => self
+                .text("preferences.receiverCount")
+                .replace("{{count}}", &count.to_string()),
+            None => self.text("preferences.unlimited"),
+        }
+    }
+
+    fn session_lifetime_label(&self) -> String {
+        match self.preferences.session_lifetime_seconds {
+            None => self.text("preferences.unlimited"),
+            Some(seconds) if seconds % (60 * 60) == 0 => self
+                .text("preferences.sessionHours")
+                .replace("{{count}}", &(seconds / (60 * 60)).to_string()),
+            Some(seconds) => self
+                .text("preferences.sessionMinutes")
+                .replace("{{count}}", &(seconds / 60).to_string()),
+        }
     }
 
     fn text(&self, key: &str) -> String {
@@ -811,6 +853,38 @@ impl AlterSendmeApp {
         cx.notify();
     }
 
+    /// Cycles the sender's active receiver limit while keeping the unlimited default explicit.
+    fn cycle_max_receivers(&mut self, cx: &mut Context<Self>) {
+        let current = self.preferences.max_receivers;
+        let next_index = MAX_RECEIVER_PRESETS
+            .iter()
+            .position(|value| *value == current)
+            .map_or(0, |index| (index + 1) % MAX_RECEIVER_PRESETS.len());
+        self.preferences.max_receivers = MAX_RECEIVER_PRESETS[next_index];
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.maxReceivers"))
+            .replace("{{value}}", &self.max_receivers_label());
+        cx.notify();
+    }
+
+    /// Cycles fixed sender lifetimes; sendmer owns the actual expiry timer after readiness.
+    fn cycle_session_lifetime(&mut self, cx: &mut Context<Self>) {
+        let current = self.preferences.session_lifetime_seconds;
+        let next_index = SESSION_LIFETIME_PRESETS
+            .iter()
+            .position(|value| *value == current)
+            .map_or(0, |index| (index + 1) % SESSION_LIFETIME_PRESETS.len());
+        self.preferences.session_lifetime_seconds = SESSION_LIFETIME_PRESETS[next_index];
+        persist_preferences(&self.preferences);
+        self.status = self
+            .text("preferences.value")
+            .replace("{{name}}", &self.text("preferences.sessionLifetime"))
+            .replace("{{value}}", &self.session_lifetime_label());
+        cx.notify();
+    }
+
     /// Selects a locale from the dropdown and persists it for the next launch.
     fn select_locale(&mut self, locale: Locale, cx: &mut Context<Self>) {
         self.locale = locale;
@@ -1073,6 +1147,8 @@ impl AlterSendmeApp {
             generation,
             relay_mode,
             self.preferences.max_upload_rate_mib_per_sec,
+            self.preferences.max_receivers,
+            self.preferences.session_lifetime_seconds,
         ));
         self.send_abort = Some(task.abort_handle());
         let app = cx.entity().downgrade();
@@ -1097,6 +1173,7 @@ impl AlterSendmeApp {
         match result {
             Ok(result) => {
                 self.send_abort = None;
+                self.sender_status = result.transfer_status();
                 self.ticket = Some(result.ticket().to_string());
                 self.send_result = Some(result);
                 self.send_phase = TransferPhase::Sharing;
@@ -1104,6 +1181,7 @@ impl AlterSendmeApp {
             }
             Err(error) => {
                 self.send_abort = None;
+                self.sender_status = SenderTransferStatus::Aborted;
                 self.send_phase = TransferPhase::Failed;
                 if self.error.is_none() {
                     self.error = Some(error);
@@ -1138,6 +1216,7 @@ impl AlterSendmeApp {
         }
         let Some(result) = self.send_result.take() else {
             if was_transporting {
+                self.sender_status = SenderTransferStatus::Aborted;
                 self.send_phase = TransferPhase::Completed;
                 self.completed_stopped = true;
                 self.completed_name = stopped_name;
@@ -1156,6 +1235,7 @@ impl AlterSendmeApp {
                 cx.notify();
                 return;
             }
+            self.sender_status = SenderTransferStatus::Idle;
             self.send_phase = TransferPhase::Idle;
             self.transfer_started_at = None;
             self.status = self.status_text("ready", "Ready");
@@ -1177,6 +1257,7 @@ impl AlterSendmeApp {
                 let _ = app.update(&mut cx, |app, cx| {
                     if app.generation == generation {
                         if was_transporting {
+                            app.sender_status = SenderTransferStatus::Aborted;
                             app.send_phase = TransferPhase::Completed;
                             app.completed_stopped = true;
                             app.completed_name = stopped_name;
@@ -1193,6 +1274,7 @@ impl AlterSendmeApp {
                             app.transfer_started_at = None;
                             app.status = app.status_text("stopped", "Transmission stopped");
                         } else {
+                            app.sender_status = SenderTransferStatus::Idle;
                             app.send_phase = TransferPhase::Idle;
                             app.ticket = None;
                             app.transfer_started_at = None;
@@ -1229,6 +1311,7 @@ impl AlterSendmeApp {
             });
         }
         self.send_phase = TransferPhase::Idle;
+        self.sender_status = SenderTransferStatus::Idle;
         self.completed_stopped = false;
         self.error = None;
         self.ticket = None;
@@ -1523,6 +1606,7 @@ impl AlterSendmeApp {
         self.error = None;
         self.sender_event_state = EventSessionState::default();
         self.receiver_event_state = EventSessionState::default();
+        self.sender_status = SenderTransferStatus::Idle;
         self.status = self.status_text("ready", "Ready");
         cx.notify();
     }
@@ -1613,6 +1697,7 @@ impl AlterSendmeApp {
             }
             TransferEventData::Completed => match role {
                 Role::Sender => {
+                    self.sender_status = SenderTransferStatus::Completed;
                     self.completed_stopped = false;
                     self.send_phase = TransferPhase::Completed;
                     self.send_progress.completed_files = self.send_progress.total_files;
@@ -1644,6 +1729,8 @@ impl AlterSendmeApp {
                 }
             },
             TransferEventData::Failed { error } => {
+                let sender_expired = role == Role::Sender
+                    && sender_status_for_failure(&error) == SenderTransferStatus::Expired;
                 let message = self.structured_error_message(&error);
                 let error_code = transfer_error_code_name(error.code).to_owned();
                 let error_phase = transfer_phase_name(error.phase).to_owned();
@@ -1654,12 +1741,13 @@ impl AlterSendmeApp {
                 self.error = Some(message);
                 match role {
                     Role::Sender => {
+                        self.sender_status = sender_status_for_failure(&error);
                         self.send_phase = TransferPhase::Failed;
                         let path = self.selected_path.clone();
                         self.record_history(
                             "sender",
                             path.as_ref(),
-                            "failed",
+                            if sender_expired { "expired" } else { "failed" },
                             Some(self.send_progress.processed),
                         );
                     }
@@ -1670,13 +1758,18 @@ impl AlterSendmeApp {
                     }
                 }
                 self.transfer_started_at = None;
-                self.status = self.status_text("transfer_failed", "Transfer failed");
+                self.status = if sender_expired {
+                    self.status_text("sender.sessionExpired", "Sharing session expired")
+                } else {
+                    self.status_text("transfer_failed", "Transfer failed")
+                };
             }
             TransferEventData::Cancelled => {
                 self.completed_stopped = true;
                 self.transfer_started_at = None;
                 match role {
                     Role::Sender => {
+                        self.sender_status = SenderTransferStatus::Aborted;
                         self.send_phase = TransferPhase::Completed;
                         let path = self.selected_path.clone();
                         self.record_history(
@@ -3251,6 +3344,22 @@ fn preferences_panel(
                     |app, cx| app.cycle_download_chunk(cx),
                 ))
                 .child(app.preference_button(
+                    "max-receivers",
+                    app.text("preferences.maxReceivers"),
+                    app.max_receivers_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_max_receivers(cx),
+                ))
+                .child(app.preference_button(
+                    "session-lifetime",
+                    app.text("preferences.sessionLifetime"),
+                    app.session_lifetime_label(),
+                    colors,
+                    cx,
+                    |app, cx| app.cycle_session_lifetime(cx),
+                ))
+                .child(app.preference_button(
                     "receive-cache",
                     app.text("preferences.receiveCache"),
                     app.receive_cache_state_label(),
@@ -3723,6 +3832,8 @@ fn default_preferences() -> Preferences {
         retry_limit: 3,
         download_limit_mb: 32,
         max_upload_rate_mib_per_sec: None,
+        max_receivers: None,
+        session_lifetime_seconds: None,
         receive_cache_enabled: default_receive_cache_enabled(),
         receive_cache_ttl_days: default_receive_cache_ttl_days(),
     }
@@ -3743,6 +3854,12 @@ fn parse_preferences(contents: &str) -> Option<Preferences> {
         None | Some(1..=MAX_UPLOAD_RATE_MIB_PER_SEC)
     ) {
         preferences.max_upload_rate_mib_per_sec = None;
+    }
+    if !MAX_RECEIVER_PRESETS.contains(&preferences.max_receivers) {
+        preferences.max_receivers = None;
+    }
+    if !SESSION_LIFETIME_PRESETS.contains(&preferences.session_lifetime_seconds) {
+        preferences.session_lifetime_seconds = None;
     }
     if !RECEIVE_CACHE_TTL_PRESETS.contains(&preferences.receive_cache_ttl_days) {
         preferences.receive_cache_ttl_days = DEFAULT_RECEIVE_CACHE_TTL_DAYS;
@@ -3825,12 +3942,13 @@ fn ticket_is_valid(ticket: &str) -> bool {
 mod history_tests {
     use super::{
         EventSessionState, HistoryEntry, Progress, TransferPhase, parse_preferences,
-        parse_upload_rate_input, path_file_count, ticket_is_valid, transfer_error_code_name,
-        ui_phase_for_core,
+        parse_upload_rate_input, path_file_count, sender_status_for_failure, ticket_is_valid,
+        transfer_error_code_name, ui_phase_for_core,
     };
     use sendmer::{
-        Role, TRANSFER_EVENT_SCHEMA_VERSION, TransferErrorCode, TransferEvent, TransferEventData,
-        TransferPhase as CoreTransferPhase, TransferSessionId,
+        Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
+        TransferErrorCode, TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
+        TransferSessionId,
     };
 
     #[test]
@@ -3985,6 +4103,8 @@ mod history_tests {
             parse_preferences(r#"{"relay":"default","retry_limit":3,"download_limit_mb":32}"#)
                 .expect("legacy preferences should parse");
         assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
+        assert_eq!(preferences.max_receivers, None);
+        assert_eq!(preferences.session_lifetime_seconds, None);
         assert!(preferences.receive_cache_enabled);
         assert_eq!(
             preferences.receive_cache_ttl_days,
@@ -4008,6 +4128,48 @@ mod history_tests {
                 parse_preferences(&contents).expect("invalid upload rate should be sanitized");
             assert_eq!(preferences.max_upload_rate_mib_per_sec, None);
         }
+    }
+
+    #[test]
+    fn preferences_preserve_v010_sender_controls_and_sanitize_unknown_values() {
+        let configured = parse_preferences(
+            r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"max_receivers":4,"session_lifetime_seconds":900}"#,
+        )
+        .expect("v0.10 sender preferences should parse");
+        assert_eq!(configured.max_receivers, Some(4));
+        assert_eq!(configured.session_lifetime_seconds, Some(900));
+
+        let sanitized = parse_preferences(
+            r#"{"relay":"default","retry_limit":3,"download_limit_mb":32,"max_receivers":3,"session_lifetime_seconds":123}"#,
+        )
+        .expect("unknown sender presets should sanitize");
+        assert_eq!(sanitized.max_receivers, None);
+        assert_eq!(sanitized.session_lifetime_seconds, None);
+    }
+
+    #[test]
+    fn sender_expiration_maps_to_non_retryable_timeout_status() {
+        let error = TransferError::new(
+            TransferErrorCode::Timeout,
+            CoreTransferPhase::Finalizing,
+            false,
+            "expired",
+        );
+        assert_eq!(
+            sender_status_for_failure(&error),
+            SenderTransferStatus::Expired
+        );
+
+        let retryable = TransferError::new(
+            TransferErrorCode::Timeout,
+            CoreTransferPhase::Transferring,
+            true,
+            "retry",
+        );
+        assert_eq!(
+            sender_status_for_failure(&retryable),
+            SenderTransferStatus::Aborted
+        );
     }
 
     #[test]

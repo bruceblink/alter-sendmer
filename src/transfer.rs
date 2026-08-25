@@ -52,6 +52,30 @@ pub(crate) fn max_upload_rate_from_mib(
         .ok_or_else(|| anyhow::anyhow!("upload rate must be greater than zero"))
 }
 
+/// Converts the optional receiver-count preference into sendmer's non-zero API value.
+pub(crate) fn max_receivers_from_preference(
+    max_receivers: Option<u64>,
+) -> anyhow::Result<Option<NonZeroU64>> {
+    max_receivers
+        .map(|value| {
+            NonZeroU64::new(value)
+                .ok_or_else(|| anyhow::anyhow!("receiver limit must be greater than zero"))
+        })
+        .transpose()
+}
+
+/// Converts the desktop lifetime preset into sendmer's fixed post-ready session duration.
+pub(crate) fn session_lifetime_from_seconds(
+    seconds: Option<u64>,
+) -> anyhow::Result<Option<Duration>> {
+    seconds
+        .map(|value| {
+            anyhow::ensure!(value > 0, "session lifetime must be greater than zero");
+            Ok(Duration::from_secs(value))
+        })
+        .transpose()
+}
+
 /// Maps the desktop cache preference to sendmer's persistent receive-cache contract.
 ///
 /// Disabled caching returns `None`; enabled caching records the selected retention period
@@ -78,6 +102,8 @@ pub async fn start_send(
     generation: u64,
     relay_mode: RelayModeOption,
     max_upload_rate_mib_per_sec: Option<u64>,
+    max_receivers: Option<u64>,
+    session_lifetime_seconds: Option<u64>,
 ) -> anyhow::Result<sendmer::SendHandle> {
     let options = SendOptions {
         relay_mode,
@@ -86,11 +112,11 @@ pub async fn start_send(
         magic_ipv4_addr: None,
         magic_ipv6_addr: None,
         max_upload_rate_bytes_per_sec: max_upload_rate_from_mib(max_upload_rate_mib_per_sec)?,
-        max_receivers: None,
+        max_receivers: max_receivers_from_preference(max_receivers)?,
         max_files: None,
         max_total_size_bytes: None,
         max_import_memory_bytes: None,
-        session_lifetime: None,
+        session_lifetime: session_lifetime_from_seconds(session_lifetime_seconds)?,
     };
     send_handle(path, options, emitter(sender, generation)).await
 }
@@ -123,8 +149,8 @@ pub async fn start_receive(
 #[cfg(test)]
 mod tests {
     use super::{
-        MEBIBYTE, ReceiveTransferOptions, max_upload_rate_from_mib, receive_cache_options,
-        start_receive, start_send,
+        MEBIBYTE, ReceiveTransferOptions, max_receivers_from_preference, max_upload_rate_from_mib,
+        receive_cache_options, session_lifetime_from_seconds, start_receive, start_send,
     };
     use async_channel::unbounded;
     use iroh::EndpointAddr;
@@ -176,6 +202,8 @@ mod tests {
                 event_sender,
                 41,
                 RelayModeOption::Disabled,
+                None,
+                None,
                 None,
             ))
             .expect("start adapter sender");
@@ -383,6 +411,34 @@ mod tests {
         );
         assert!(max_upload_rate_from_mib(Some(0)).is_err());
         assert!(max_upload_rate_from_mib(Some(u64::MAX)).is_err());
+    }
+
+    #[test]
+    fn sender_preferences_map_to_v010_options() {
+        assert_eq!(
+            max_receivers_from_preference(None).expect("unlimited receivers"),
+            None
+        );
+        assert_eq!(
+            max_receivers_from_preference(Some(4))
+                .expect("receiver limit")
+                .expect("configured receiver limit")
+                .get(),
+            4
+        );
+        assert!(max_receivers_from_preference(Some(0)).is_err());
+
+        assert_eq!(
+            session_lifetime_from_seconds(Some(900))
+                .expect("session lifetime")
+                .expect("configured session lifetime"),
+            Duration::from_secs(900)
+        );
+        assert!(session_lifetime_from_seconds(Some(0)).is_err());
+        assert_eq!(
+            session_lifetime_from_seconds(None).expect("unlimited lifetime"),
+            None
+        );
     }
 
     /// Lists sendmer receive staging directories so cancellation cleanup can be compared exactly.
