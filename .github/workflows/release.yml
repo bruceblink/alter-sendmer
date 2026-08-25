@@ -41,10 +41,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
       CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - name: Install Linux GPUI and packaging dependencies
         if: runner.os == 'Linux'
         run: |
@@ -167,9 +170,10 @@ jobs:
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
-          IDENTITY_REGEX="^https://github[.]com/${GITHUB_REPOSITORY}/[.]github/workflows/release[.]yml@refs/tags/${RELEASE_TAG}$"
+          IDENTITY_REGEX="^https://github[.]com/${GITHUB_REPOSITORY}/[.]github/workflows/release[.]yml@${WORKFLOW_REF}$"
           SBOM="dist/AlterSendmer-${RELEASE_TAG}.spdx.json"
           test -s "$SBOM"
           cosign sign-blob "$SBOM" --bundle "${SBOM}.sigstore.json" --yes
@@ -198,6 +202,7 @@ jobs:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
           PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          WORKFLOW_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           test -s "$PROVENANCE_BUNDLE"
@@ -209,7 +214,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --bundle "$PROVENANCE_ASSET" \
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
-              --source-ref "refs/tags/${RELEASE_TAG}"
+              --source-ref "$WORKFLOW_REF"
           done < <(find "$RUNNER_TEMP/alter-sendmer-subjects" -type f -print0 | sort -z)
       - name: Set up Python
         uses: actions/setup-python@v5
