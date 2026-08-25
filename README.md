@@ -29,6 +29,8 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
   after a successful export.
 - Versioned transfer events with session IDs, ordered phases, structured error summaries, and
   retry-aware history diagnostics.
+- Sender controls for receiver-count limits, session lifetime presets, and explicit TM1 transfer
+  manifests; legacy Collection V0 remains the default.
 - System, dark, and light themes plus a dropdown containing all 21 bundled languages.
 - Relay, retry, download-chunk, sender upload-limit, and receive-cache retention preferences.
 - Diagnostics, signed update checks, and donation links.
@@ -74,7 +76,7 @@ resume and is not evidence of kernel-level packet-loss or latency fault injectio
 ```powershell
 cargo install cargo-packager --version 0.11.8 --locked
 cargo packager --release --formats nsis --out-dir dist/windows-x86_64
-.\scripts\package-portable.ps1 -Version 0.5.0 -SkipBuild
+.\scripts\package-portable.ps1 -Version 0.6.0 -SkipBuild
 ```
 
 Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
