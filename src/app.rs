@@ -156,24 +156,64 @@ struct DiagnosticSummary<'a> {
     history_count: usize,
     sendmer_version: &'a str,
     receive_cache: &'a str,
-    sender_session: &'a str,
-    receiver_session: &'a str,
+    sender: DiagnosticTransferState<'a>,
+    receiver: DiagnosticTransferState<'a>,
     last_error: &'a str,
+}
+
+/// Holds stable, support-safe fields for one sender or receiver event stream.
+struct DiagnosticTransferState<'a> {
+    role: &'a str,
+    phase: &'a str,
+    sequence: u64,
+    session_id: &'a str,
+    error_code: &'a str,
+    error_phase: &'a str,
+    duration_ms: u128,
 }
 
 /// Format the support-safe diagnostic fields that can be displayed or exported.
 fn format_diagnostics(summary: DiagnosticSummary<'_>) -> String {
     format!(
-        "client={} | relay={} | history_entries={} | sendmer={} | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
+        "client={} | relay={} | history_entries={} | sendmer={} | receive_cache={} | sender_role={} | sender_phase={} | sender_sequence={} | sender_session={} | sender_error_code={} | sender_error_phase={} | sender_duration_ms={} | receiver_role={} | receiver_phase={} | receiver_sequence={} | receiver_session={} | receiver_error_code={} | receiver_error_phase={} | receiver_duration_ms={} | last_error={}",
         summary.client_version,
         summary.relay,
         summary.history_count,
         summary.sendmer_version,
         summary.receive_cache,
-        summary.sender_session,
-        summary.receiver_session,
+        summary.sender.role,
+        summary.sender.phase,
+        summary.sender.sequence,
+        summary.sender.session_id,
+        summary.sender.error_code,
+        summary.sender.error_phase,
+        summary.sender.duration_ms,
+        summary.receiver.role,
+        summary.receiver.phase,
+        summary.receiver.sequence,
+        summary.receiver.session_id,
+        summary.receiver.error_code,
+        summary.receiver.error_phase,
+        summary.receiver.duration_ms,
         summary.last_error,
     )
+}
+
+/// Maps the desktop lifecycle phase to a stable, locale-independent diagnostic value.
+fn diagnostic_phase_name(phase: TransferPhase) -> &'static str {
+    match phase {
+        TransferPhase::Idle => "idle",
+        TransferPhase::Preparing => "preparing",
+        TransferPhase::Sharing => "sharing",
+        TransferPhase::Connecting => "connecting",
+        TransferPhase::Metadata => "metadata",
+        TransferPhase::Transporting => "transporting",
+        TransferPhase::Exporting => "exporting",
+        TransferPhase::Finalizing => "finalizing",
+        TransferPhase::Stopping => "stopping",
+        TransferPhase::Completed => "completed",
+        TransferPhase::Failed => "failed",
+    }
 }
 
 fn diagnostic_report_file_name(timestamp: u64) -> String {
@@ -808,14 +848,60 @@ impl AlterSendmeApp {
             );
             let relay = self.relay_label();
             let receive_cache = self.receive_cache_state_label();
+            let duration_ms = self
+                .transfer_started_at
+                .map(|started| started.elapsed().as_millis())
+                .unwrap_or_else(|| self.completed_duration.as_millis());
+            let sender_duration_ms = if self.sender_event_state.sequence > 0 {
+                duration_ms
+            } else {
+                0
+            };
+            let receiver_duration_ms = if self.receiver_event_state.sequence > 0 {
+                duration_ms
+            } else {
+                0
+            };
+            let sender_error_code = self.sender_event_state.error_code.as_deref().unwrap_or("-");
+            let sender_error_phase = self
+                .sender_event_state
+                .error_phase
+                .as_deref()
+                .unwrap_or("-");
+            let receiver_error_code = self
+                .receiver_event_state
+                .error_code
+                .as_deref()
+                .unwrap_or("-");
+            let receiver_error_phase = self
+                .receiver_event_state
+                .error_phase
+                .as_deref()
+                .unwrap_or("-");
             self.diagnostics = Some(format_diagnostics(DiagnosticSummary {
                 client_version: &client_version,
                 relay: &relay,
                 history_count: self.history.len(),
                 sendmer_version: SENDMER_VERSION,
                 receive_cache: &receive_cache,
-                sender_session,
-                receiver_session,
+                sender: DiagnosticTransferState {
+                    role: "sender",
+                    phase: diagnostic_phase_name(self.send_phase),
+                    sequence: self.sender_event_state.sequence,
+                    session_id: sender_session,
+                    error_code: sender_error_code,
+                    error_phase: sender_error_phase,
+                    duration_ms: sender_duration_ms,
+                },
+                receiver: DiagnosticTransferState {
+                    role: "receiver",
+                    phase: diagnostic_phase_name(self.receive_phase),
+                    sequence: self.receiver_event_state.sequence,
+                    session_id: receiver_session,
+                    error_code: receiver_error_code,
+                    error_phase: receiver_error_phase,
+                    duration_ms: receiver_duration_ms,
+                },
                 last_error,
             }));
             self.status = self.text("diagnostics.completed");
@@ -4070,10 +4156,10 @@ fn ticket_is_valid(ticket: &str) -> bool {
 #[cfg(test)]
 mod history_tests {
     use super::{
-        DiagnosticSummary, EventSessionState, HistoryEntry, Progress, TransferPhase,
-        diagnostic_report_file_name, format_diagnostics, parse_preferences,
-        parse_upload_rate_input, path_file_count, sender_status_for_failure, ticket_is_valid,
-        transfer_error_code_name, ui_phase_for_core, write_diagnostic_report,
+        DiagnosticSummary, DiagnosticTransferState, EventSessionState, HistoryEntry, Progress,
+        TransferPhase, diagnostic_phase_name, diagnostic_report_file_name, format_diagnostics,
+        parse_preferences, parse_upload_rate_input, path_file_count, sender_status_for_failure,
+        ticket_is_valid, transfer_error_code_name, ui_phase_for_core, write_diagnostic_report,
     };
     use sendmer::{
         Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
@@ -4236,16 +4322,47 @@ mod history_tests {
             history_count: 2,
             sendmer_version: "0.10.0",
             receive_cache: "enabled",
-            sender_session: "0123456789abcdef0123456789abcdef",
-            receiver_session: "-",
+            sender: DiagnosticTransferState {
+                role: "sender",
+                phase: "transferring",
+                sequence: 7,
+                session_id: "0123456789abcdef0123456789abcdef",
+                error_code: "-",
+                error_phase: "-",
+                duration_ms: 1234,
+            },
+            receiver: DiagnosticTransferState {
+                role: "receiver",
+                phase: "idle",
+                sequence: 0,
+                session_id: "-",
+                error_code: "timeout",
+                error_phase: "connecting",
+                duration_ms: 0,
+            },
             last_error: "timeout",
         });
         assert!(report.contains("client=Client 0.6.0"));
         assert!(report.contains("sendmer=0.10.0"));
+        assert!(report.contains("sender_role=sender"));
+        assert!(report.contains("sender_phase=transferring"));
+        assert!(report.contains("sender_sequence=7"));
+        assert!(report.contains("sender_duration_ms=1234"));
+        assert!(report.contains("receiver_error_code=timeout"));
         assert!(report.contains("last_error=timeout"));
         assert!(!report.contains("ticket"));
         assert!(!report.contains("C:/"));
         assert!(!report.contains("connection_id"));
+    }
+
+    #[test]
+    fn diagnostic_phase_names_are_stable_and_locale_independent() {
+        assert_eq!(diagnostic_phase_name(TransferPhase::Idle), "idle");
+        assert_eq!(
+            diagnostic_phase_name(TransferPhase::Transporting),
+            "transporting"
+        );
+        assert_eq!(diagnostic_phase_name(TransferPhase::Failed), "failed");
     }
 
     #[test]
