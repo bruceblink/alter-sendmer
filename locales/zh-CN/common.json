@@ -11,7 +11,11 @@
   "diagnostics": {
     "action": "诊断信息",
     "client": "客户端",
-    "completed": "诊断信息已生成"
+    "completed": "诊断信息已生成",
+    "save": "保存诊断报告",
+    "savePrompt": "选择诊断报告保存目录",
+    "saved": "诊断报告已保存",
+    "saveFailed": "诊断报告保存失败"
   },
   "update": {
     "checkNow": "检查更新",

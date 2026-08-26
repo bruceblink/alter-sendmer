@@ -196,6 +196,10 @@ mod tests {
             "language.label",
             "language.select",
             "diagnostics.action",
+            "diagnostics.save",
+            "diagnostics.savePrompt",
+            "diagnostics.saved",
+            "diagnostics.saveFailed",
             "history.title",
             "preferences.title",
             "preferences.relay",
@@ -276,6 +280,10 @@ mod tests {
     fn every_locale_has_the_complete_english_fallback_catalog() {
         let required = [
             "diagnostics.action",
+            "diagnostics.save",
+            "diagnostics.savePrompt",
+            "diagnostics.saved",
+            "diagnostics.saveFailed",
             "history.title",
             "history.clear",
             "preferences.relay",

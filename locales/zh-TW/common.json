@@ -11,7 +11,11 @@
   "diagnostics": {
     "action": "診斷資訊",
     "client": "用戶端",
-    "completed": "診斷資訊已產生"
+    "completed": "診斷資訊已產生",
+    "save": "儲存診斷報告",
+    "savePrompt": "選擇診斷報告儲存資料夾",
+    "saved": "診斷報告已儲存",
+    "saveFailed": "診斷報告儲存失敗"
   },
   "update": {
     "checkNow": "檢查更新",

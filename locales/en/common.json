@@ -11,7 +11,11 @@
   "diagnostics": {
     "action": "Diagnostics",
     "client": "Client",
-    "completed": "Diagnostics ready"
+    "completed": "Diagnostics ready",
+    "save": "Save report",
+    "savePrompt": "Choose a folder for the diagnostic report",
+    "saved": "Diagnostic report saved",
+    "saveFailed": "Could not save diagnostic report"
   },
   "update": {
     "checkNow": "Check Update",

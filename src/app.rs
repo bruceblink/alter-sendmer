@@ -17,8 +17,9 @@ use sendmer::{
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
+    io::Write,
     ops::Range,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -146,6 +147,52 @@ fn sender_status_for_failure(error: &TransferError) -> SenderTransferStatus {
     } else {
         SenderTransferStatus::Aborted
     }
+}
+
+/// Holds only the fields that are safe to display or export for support.
+struct DiagnosticSummary<'a> {
+    client_version: &'a str,
+    relay: &'a str,
+    history_count: usize,
+    sendmer_version: &'a str,
+    receive_cache: &'a str,
+    sender_session: &'a str,
+    receiver_session: &'a str,
+    last_error: &'a str,
+}
+
+/// Format the support-safe diagnostic fields that can be displayed or exported.
+fn format_diagnostics(summary: DiagnosticSummary<'_>) -> String {
+    format!(
+        "client={} | relay={} | history_entries={} | sendmer={} | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
+        summary.client_version,
+        summary.relay,
+        summary.history_count,
+        summary.sendmer_version,
+        summary.receive_cache,
+        summary.sender_session,
+        summary.receiver_session,
+        summary.last_error,
+    )
+}
+
+fn diagnostic_report_file_name(timestamp: u64) -> String {
+    format!("alter-sendmer-diagnostics-{timestamp}.txt")
+}
+
+/// Write one diagnostic report without replacing an existing report with the same timestamp.
+fn write_diagnostic_report(
+    directory: &Path,
+    timestamp: u64,
+    report: &str,
+) -> std::io::Result<PathBuf> {
+    let destination = directory.join(diagnostic_report_file_name(timestamp));
+    let mut file = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&destination)?;
+    file.write_all(report.as_bytes())?;
+    Ok(destination)
 }
 
 fn ui_phase_for_core(role: Role, phase: CoreTransferPhase) -> TransferPhase {
@@ -754,23 +801,64 @@ impl AlterSendmeApp {
                 .as_deref()
                 .or(self.sender_event_state.error_code.as_deref())
                 .unwrap_or("-");
-            self.diagnostics = Some(format!(
-                "{} {} | {}={} | {}={} | sendmer={} | receive_cache={} | sender_session={} | receiver_session={} | last_error={}",
+            let client_version = format!(
+                "{} {}",
                 self.text("diagnostics.client"),
-                env!("CARGO_PKG_VERSION"),
-                self.text("preferences.relay"),
-                self.relay_label(),
-                self.text("history.title"),
-                self.history.len(),
-                SENDMER_VERSION,
-                self.receive_cache_state_label(),
+                env!("CARGO_PKG_VERSION")
+            );
+            let relay = self.relay_label();
+            let receive_cache = self.receive_cache_state_label();
+            self.diagnostics = Some(format_diagnostics(DiagnosticSummary {
+                client_version: &client_version,
+                relay: &relay,
+                history_count: self.history.len(),
+                sendmer_version: SENDMER_VERSION,
+                receive_cache: &receive_cache,
                 sender_session,
                 receiver_session,
-                last_error
-            ));
+                last_error,
+            }));
             self.status = self.text("diagnostics.completed");
         }
         cx.notify();
+    }
+
+    /// Save the visible diagnostic summary without copying private transfer data to disk.
+    fn save_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let Some(report) = self.diagnostics.clone() else {
+            return;
+        };
+        let prompt = self.text("diagnostics.savePrompt");
+        let prompt = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(prompt.into()),
+        });
+        let app = cx.entity().downgrade();
+        cx.spawn(move |_, cx: &mut AsyncApp| {
+            let mut cx = cx.clone();
+            async move {
+                if let Ok(Ok(Some(paths))) = prompt.await
+                    && let Some(directory) = paths.into_iter().next()
+                {
+                    let result = write_diagnostic_report(&directory, unix_timestamp(), &report);
+                    let _ = app.update(&mut cx, |app, cx| {
+                        match result {
+                            Ok(_) => app.status = app.text("diagnostics.saved"),
+                            Err(error) => {
+                                app.error = Some(format!(
+                                    "{}: {error}",
+                                    app.text("diagnostics.saveFailed")
+                                ));
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            }
+        })
+        .detach();
     }
 
     fn save_ticket(&mut self, cx: &mut Context<Self>) {
@@ -2799,7 +2887,15 @@ impl Render for AlterSendmeApp {
                                             div().text_xs().text_color(colors.muted).child(
                                                 self.diagnostics.clone().unwrap_or_default(),
                                             ),
-                                        ),
+                                        )
+                                        .child(self.secondary_button(
+                                            "diagnostics-save",
+                                            self.text("diagnostics.save"),
+                                            true,
+                                            colors,
+                                            cx,
+                                            |app, cx| app.save_diagnostics(cx),
+                                        )),
                                 )
                             })
                             .child(
@@ -3974,15 +4070,17 @@ fn ticket_is_valid(ticket: &str) -> bool {
 #[cfg(test)]
 mod history_tests {
     use super::{
-        EventSessionState, HistoryEntry, Progress, TransferPhase, parse_preferences,
+        DiagnosticSummary, EventSessionState, HistoryEntry, Progress, TransferPhase,
+        diagnostic_report_file_name, format_diagnostics, parse_preferences,
         parse_upload_rate_input, path_file_count, sender_status_for_failure, ticket_is_valid,
-        transfer_error_code_name, ui_phase_for_core,
+        transfer_error_code_name, ui_phase_for_core, write_diagnostic_report,
     };
     use sendmer::{
         Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
         TransferErrorCode, TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
         TransferSessionId,
     };
+    use std::fs;
 
     #[test]
     fn phase_model_exposes_idle_active_completion_and_failure() {
@@ -4128,6 +4226,47 @@ mod history_tests {
     fn receiver_rejects_empty_or_malformed_ticket() {
         assert!(!ticket_is_valid(""));
         assert!(!ticket_is_valid("sendme receive ticket"));
+    }
+
+    #[test]
+    fn diagnostics_report_contains_only_support_safe_fields() {
+        let report = format_diagnostics(DiagnosticSummary {
+            client_version: "Client 0.6.0",
+            relay: "Automatic",
+            history_count: 2,
+            sendmer_version: "0.10.0",
+            receive_cache: "enabled",
+            sender_session: "0123456789abcdef0123456789abcdef",
+            receiver_session: "-",
+            last_error: "timeout",
+        });
+        assert!(report.contains("client=Client 0.6.0"));
+        assert!(report.contains("sendmer=0.10.0"));
+        assert!(report.contains("last_error=timeout"));
+        assert!(!report.contains("ticket"));
+        assert!(!report.contains("C:/"));
+        assert!(!report.contains("connection_id"));
+    }
+
+    #[test]
+    fn diagnostics_report_file_name_is_timestamped() {
+        assert_eq!(
+            diagnostic_report_file_name(1_700_000_000),
+            "alter-sendmer-diagnostics-1700000000.txt"
+        );
+    }
+
+    #[test]
+    fn diagnostic_report_write_is_non_replacing_and_round_trips_contents() {
+        let directory = tempfile::tempdir().expect("create diagnostic directory");
+        let path = write_diagnostic_report(directory.path(), 1_700_000_000, "safe report\n")
+            .expect("write diagnostic report");
+
+        assert_eq!(
+            fs::read_to_string(&path).expect("read diagnostic report"),
+            "safe report\n"
+        );
+        assert!(write_diagnostic_report(directory.path(), 1_700_000_000, "replacement\n").is_err());
     }
 
     #[test]
