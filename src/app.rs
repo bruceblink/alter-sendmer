@@ -309,6 +309,7 @@ struct EventSessionState {
     error_code: Option<String>,
     error_phase: Option<String>,
     retryable: Option<bool>,
+    duration_ms: u128,
 }
 
 impl EventSessionState {
@@ -367,7 +368,6 @@ struct Preferences {
 
 /// Owns all user-facing state and serializes async transfer completions by generation.
 pub struct AlterSendmeApp {
-    started_at: Instant,
     tab: Tab,
     theme: Theme,
     locale: Locale,
@@ -421,7 +421,7 @@ pub struct AlterSendmeApp {
 
 impl AlterSendmeApp {
     /// Creates a ready-to-use workspace and starts a lightweight event pump.
-    pub fn new(started_at: Instant, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let (event_sender, event_receiver) = async_channel::unbounded();
         let save_path = directories::UserDirs::new()
             .and_then(|dirs| dirs.download_dir().map(PathBuf::from))
@@ -436,7 +436,6 @@ impl AlterSendmeApp {
             .unwrap_or_default();
         window.focus(&root_focus, cx);
         let app = Self {
-            started_at,
             tab: Tab::Send,
             theme: load_theme(),
             locale: load_locale(),
@@ -848,20 +847,8 @@ impl AlterSendmeApp {
             );
             let relay = self.relay_label();
             let receive_cache = self.receive_cache_state_label();
-            let duration_ms = self
-                .transfer_started_at
-                .map(|started| started.elapsed().as_millis())
-                .unwrap_or_else(|| self.completed_duration.as_millis());
-            let sender_duration_ms = if self.sender_event_state.sequence > 0 {
-                duration_ms
-            } else {
-                0
-            };
-            let receiver_duration_ms = if self.receiver_event_state.sequence > 0 {
-                duration_ms
-            } else {
-                0
-            };
+            let sender_duration_ms = self.diagnostic_duration_ms(Role::Sender);
+            let receiver_duration_ms = self.diagnostic_duration_ms(Role::Receiver);
             let sender_error_code = self.sender_event_state.error_code.as_deref().unwrap_or("-");
             let sender_error_phase = self
                 .sender_event_state
@@ -1248,6 +1235,33 @@ impl AlterSendmeApp {
         *self.event_state_mut(role) = EventSessionState::default();
     }
 
+    /// Captures elapsed time for one role while its transfer is active, or reuses its last value.
+    fn capture_transfer_duration(&mut self, role: Role) -> Duration {
+        if let Some(started) = self.transfer_started_at {
+            let duration = started.elapsed();
+            self.event_state_mut(role).duration_ms = duration.as_millis();
+            duration
+        } else {
+            let duration_ms = self.event_state(role).duration_ms;
+            Duration::from_millis(duration_ms.min(u64::MAX as u128) as u64)
+        }
+    }
+
+    /// Selects current active time or the recorded terminal duration for diagnostics per role.
+    fn diagnostic_duration_ms(&self, role: Role) -> u128 {
+        let phase_is_active = match role {
+            Role::Sender => self.send_phase.is_active(),
+            Role::Receiver => self.receive_phase.is_active(),
+        };
+        if phase_is_active {
+            self.transfer_started_at
+                .map(|started| started.elapsed().as_millis())
+                .unwrap_or_default()
+        } else {
+            self.event_state(role).duration_ms
+        }
+    }
+
     /// Projects the core phase onto the desktop state machine without reimplementing transport.
     fn apply_core_phase(&mut self, role: Role, phase: CoreTransferPhase) {
         let ui_phase = ui_phase_for_core(role, phase);
@@ -1276,20 +1290,17 @@ impl AlterSendmeApp {
         outcome: &str,
         size_override: Option<u64>,
     ) {
-        let duration = self
-            .transfer_started_at
-            .map(|started| started.elapsed())
-            .unwrap_or_default();
+        let role_kind = if role == "sender" {
+            Role::Sender
+        } else {
+            Role::Receiver
+        };
+        let duration = self.capture_transfer_duration(role_kind);
         let size = size_override.unwrap_or_else(|| path.map(path_size).unwrap_or(0));
         let speed = if duration.is_zero() {
             0
         } else {
             (size as f64 / duration.as_secs_f64()) as u64
-        };
-        let role_kind = if role == "sender" {
-            Role::Sender
-        } else {
-            Role::Receiver
         };
         let event_state = self.event_state(role_kind).clone();
         self.history.push(HistoryEntry {
@@ -1403,10 +1414,7 @@ impl AlterSendmeApp {
             .and_then(|path| path.file_name())
             .map(|name| name.to_string_lossy().to_string());
         let stopped_path = self.selected_path.clone();
-        let stopped_duration = self
-            .transfer_started_at
-            .map(|started| started.elapsed())
-            .unwrap_or_default();
+        let stopped_duration = self.capture_transfer_duration(Role::Sender);
         self.generation += 1;
         let generation = self.generation;
         if let Some(abort) = self.send_abort.take() {
@@ -1666,6 +1674,7 @@ impl AlterSendmeApp {
         result: Result<sendmer::ReceiveResult, String>,
         cx: &mut Context<Self>,
     ) {
+        let completed_duration = self.capture_transfer_duration(Role::Receiver);
         match result {
             Ok(result) => {
                 self.completed_stopped = false;
@@ -1676,10 +1685,7 @@ impl AlterSendmeApp {
                     .map(|n| n.to_string_lossy().to_string());
                 self.completed_path = Some(result.file_path.clone());
                 self.completed_size = path_size(&result.file_path);
-                self.completed_duration = self
-                    .transfer_started_at
-                    .unwrap_or(self.started_at)
-                    .elapsed();
+                self.completed_duration = completed_duration;
                 let path = Some(result.file_path.clone());
                 self.record_history(
                     "receiver",
@@ -1713,6 +1719,7 @@ impl AlterSendmeApp {
     }
 
     fn stop_receiving(&mut self, cx: &mut Context<Self>) {
+        self.capture_transfer_duration(Role::Receiver);
         self.generation += 1;
         if let Some(cancel) = self.receive_cancel.take() {
             let _ = cancel.send(true);
@@ -1906,10 +1913,7 @@ impl AlterSendmeApp {
                         .map(|name| name.to_string_lossy().to_string());
                     self.completed_path = self.selected_path.clone();
                     self.completed_size = self.send_progress.total;
-                    self.completed_duration = self
-                        .transfer_started_at
-                        .unwrap_or(self.started_at)
-                        .elapsed();
+                    self.completed_duration = self.capture_transfer_duration(Role::Sender);
                     self.transfer_started_at = None;
                     self.status = self.status_text("transfer_completed", "Transfer completed");
                     let path = self.selected_path.clone();
@@ -1932,6 +1936,7 @@ impl AlterSendmeApp {
                 let message = self.structured_error_message(&error);
                 let error_code = transfer_error_code_name(error.code).to_owned();
                 let error_phase = transfer_phase_name(error.phase).to_owned();
+                self.capture_transfer_duration(role);
                 let state = self.event_state_mut(role);
                 state.error_code = Some(error_code);
                 state.error_phase = Some(error_phase);
@@ -1964,6 +1969,7 @@ impl AlterSendmeApp {
             }
             TransferEventData::Cancelled => {
                 self.completed_stopped = true;
+                self.capture_transfer_duration(role);
                 self.transfer_started_at = None;
                 match role {
                     Role::Sender => {

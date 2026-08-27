@@ -31,7 +31,10 @@ impl AssetSource for AppAssets {
 actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 
 /// Starts the native window and installs the same quit bindings used by flash-shot.
-pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
+///
+/// The legacy start timestamp remains accepted for embedding compatibility; each transfer now
+/// records its own elapsed time so diagnostics cannot attribute one role's duration to another.
+pub fn run(_started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
     // Install one process-wide tracing subscriber so sendmer cleanup and connection diagnostics
     // remain visible without writing tickets or file contents to persistent logs.
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -86,7 +89,7 @@ pub fn run(started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
                 ..Default::default()
             };
             if let Err(error) = cx.open_window(options, move |window, cx| {
-                let app = cx.new(|cx| app::AlterSendmeApp::new(started_at, window, cx));
+                let app = cx.new(|cx| app::AlterSendmeApp::new(window, cx));
                 // Keep the entity alive until the app-level quit hook has drained transfer resources.
                 let app_for_quit = app.clone();
                 cx.on_app_quit(move |cx| {
