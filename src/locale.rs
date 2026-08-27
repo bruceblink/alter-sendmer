@@ -220,6 +220,7 @@ mod tests {
             "receiver.ticketLabel",
             "receiver.pasteFromClipboard",
             "receiver.startReceiving",
+            "receiver.ticketTooLong",
             "state.label",
         ];
         for locale in [Locale::SimplifiedChinese, Locale::TraditionalChinese] {
@@ -304,6 +305,7 @@ mod tests {
             "receiver.startReceiving",
             "sender.saveTicket",
             "receiver.invalidTicket",
+            "receiver.ticketTooLong",
             "transfer.tryAgain",
         ];
         for locale in Locale::all() {

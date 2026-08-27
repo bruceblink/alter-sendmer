@@ -92,7 +92,8 @@
     "downloadCompleted": "下载完成",
     "openFolder": "打开文件夹",
     "stopReceiving": "停止接收",
-    "invalidTicket": "票据无效或已过期"
+    "invalidTicket": "票据无效或已过期",
+    "ticketTooLong": "票据过长（最多 {{max}} 字节）"
   },
   "transfer": {
     "progress": "传输进度",

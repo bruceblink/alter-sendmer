@@ -1533,11 +1533,19 @@ impl AlterSendmeApp {
         self.start_receiving(cx);
     }
 
+    /// Replaces the receive ticket from the clipboard, keeping the current value when the
+    /// trimmed clipboard content exceeds the byte limit so an invalid ticket is never staged.
     fn paste_ticket(&mut self, cx: &mut Context<Self>) {
         if let Some(item) = cx.read_from_clipboard()
             && let Some(text) = item.text()
         {
-            self.ticket_input = text.trim().to_owned();
+            let ticket = text.trim();
+            if !ticket_replacement_fits_limit(0, 0, ticket.len()) {
+                self.error = Some(self.ticket_length_error());
+                cx.notify();
+                return;
+            }
+            self.ticket_input = ticket.to_owned();
             self.ticket_selection = self.ticket_input.len()..self.ticket_input.len();
             self.error = None;
             cx.notify();
@@ -3217,15 +3225,36 @@ impl EntityInputHandler for AlterSendmeApp {
 }
 
 impl AlterSendmeApp {
+    /// Replaces the selected ticket text only when the resulting UTF-8 byte length stays within
+    /// the input limit; rejected edits leave the existing value intact and show a recoverable error.
     fn replace_ticket(&mut self, range: Option<Range<usize>>, text: &str) {
         let range = range
             .map(|range| utf16_to_byte_range(&self.ticket_input, range))
             .unwrap_or_else(|| self.ticket_selection.clone());
         let start = range.start.min(self.ticket_input.len());
         let end = range.end.min(self.ticket_input.len());
-        if start <= end && self.ticket_input.len() - (end - start) + text.len() <= MAX_TICKET_LEN {
-            self.ticket_input.replace_range(start..end, text);
-            self.ticket_selection = start + text.len()..start + text.len();
+        if start > end {
+            return;
+        }
+        if !ticket_replacement_fits_limit(self.ticket_input.len(), end - start, text.len()) {
+            self.error = Some(self.ticket_length_error());
+            return;
+        }
+        self.ticket_input.replace_range(start..end, text);
+        self.ticket_selection = start + text.len()..start + text.len();
+        self.clear_ticket_length_error();
+    }
+
+    fn ticket_length_error(&self) -> String {
+        self.text("receiver.ticketTooLong")
+            .replace("{{max}}", &MAX_TICKET_LEN.to_string())
+    }
+
+    /// Clears only the ticket-length warning, leaving unrelated transfer or settings errors visible.
+    fn clear_ticket_length_error(&mut self) {
+        let message = self.ticket_length_error();
+        if self.error.as_deref() == Some(message.as_str()) {
+            self.error = None;
         }
     }
 
@@ -3930,6 +3959,7 @@ fn ticket_input(
         .child(
             div()
                 .text_xs()
+                .truncate()
                 .text_color(if app.ticket_input.is_empty() {
                     colors.muted
                 } else {
@@ -4159,13 +4189,31 @@ fn ticket_is_valid(ticket: &str) -> bool {
     ticket.parse::<iroh_blobs::ticket::BlobTicket>().is_ok()
 }
 
+/// Checks the resulting UTF-8 byte length of a ticket replacement without allowing arithmetic
+/// overflow; callers can reject an edit before mutating the visible input value.
+fn ticket_replacement_fits_limit(
+    current_len: usize,
+    replaced_len: usize,
+    inserted_len: usize,
+) -> bool {
+    let Some(remaining_len) = current_len.checked_sub(replaced_len) else {
+        return false;
+    };
+    let Some(result_len) = remaining_len.checked_add(inserted_len) else {
+        return false;
+    };
+    result_len <= MAX_TICKET_LEN
+}
+
 #[cfg(test)]
 mod history_tests {
     use super::{
-        DiagnosticSummary, DiagnosticTransferState, EventSessionState, HistoryEntry, Progress,
-        TransferPhase, diagnostic_phase_name, diagnostic_report_file_name, format_diagnostics,
-        parse_preferences, parse_upload_rate_input, path_file_count, sender_status_for_failure,
-        ticket_is_valid, transfer_error_code_name, ui_phase_for_core, write_diagnostic_report,
+        DiagnosticSummary, DiagnosticTransferState, EventSessionState, HistoryEntry,
+        MAX_TICKET_LEN, Progress, TransferPhase, diagnostic_phase_name,
+        diagnostic_report_file_name, format_diagnostics, parse_preferences,
+        parse_upload_rate_input, path_file_count, sender_status_for_failure, ticket_is_valid,
+        ticket_replacement_fits_limit, transfer_error_code_name, ui_phase_for_core,
+        write_diagnostic_report,
     };
     use sendmer::{
         Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
@@ -4318,6 +4366,15 @@ mod history_tests {
     fn receiver_rejects_empty_or_malformed_ticket() {
         assert!(!ticket_is_valid(""));
         assert!(!ticket_is_valid("sendme receive ticket"));
+    }
+
+    #[test]
+    fn ticket_replacement_enforces_the_byte_limit_and_handles_overflow() {
+        assert!(ticket_replacement_fits_limit(MAX_TICKET_LEN, 0, 0));
+        assert!(!ticket_replacement_fits_limit(MAX_TICKET_LEN, 0, 1));
+        assert!(ticket_replacement_fits_limit(MAX_TICKET_LEN, 1, 1));
+        assert!(!ticket_replacement_fits_limit(0, 1, 0));
+        assert!(!ticket_replacement_fits_limit(usize::MAX, 0, 1));
     }
 
     #[test]

@@ -91,7 +91,8 @@
     "downloadCompleted": "下載完成",
     "openFolder": "開啟資料夾",
     "stopReceiving": "停止接收",
-    "invalidTicket": "票券無效或已過期"
+    "invalidTicket": "票券無效或已過期",
+    "ticketTooLong": "票券過長（最多 {{max}} 位元組）"
   },
   "transfer": {
     "progress": "傳輸進度",

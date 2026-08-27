@@ -92,7 +92,8 @@
     "downloadCompleted": "Download completed",
     "openFolder": "Open folder",
     "stopReceiving": "Stop receiving",
-    "invalidTicket": "The ticket is invalid or expired"
+    "invalidTicket": "The ticket is invalid or expired",
+    "ticketTooLong": "The ticket is too long (maximum {{max}} bytes)"
   },
   "transfer": {
     "progress": "Transfer Progress",
