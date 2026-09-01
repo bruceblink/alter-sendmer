@@ -2023,6 +2023,7 @@ impl AlterSendmeApp {
             .focus_visible(|style| style.border_color(colors.accent))
             .role(A11yRole::Tab)
             .aria_label(label)
+            .aria_selected(active)
             .flex_1()
             .h(px(38.0))
             .flex()
@@ -3878,6 +3879,8 @@ fn locale_menu(
         .child(
             div()
                 .id("locale-options-scroll")
+                .role(A11yRole::ListBox)
+                .aria_label(app.text("language.select"))
                 .flex_1()
                 .min_h(px(0.0))
                 .overflow_y_scroll()

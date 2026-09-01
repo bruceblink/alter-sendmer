@@ -138,6 +138,21 @@ function Find-FooterButton {
     return $footerButtons[0]
 }
 
+function Assert-SelectedTab([int]$Index, [bool]$Expected) {
+    # Verify the tab's AccessKit selection state through Windows UI Automation.
+    $tab = Find-Control ([System.Windows.Automation.ControlType]::TabItem) $Index
+    $pattern = $null
+    if (-not $tab.TryGetCurrentPattern(
+        [System.Windows.Automation.SelectionItemPattern]::Pattern,
+        [ref]$pattern
+    )) {
+        throw "Tab at index $Index does not expose a selection pattern."
+    }
+    if ($pattern.Current.IsSelected -ne $Expected) {
+        throw "Tab at index $Index selection state was $($pattern.Current.IsSelected), expected $Expected."
+    }
+}
+
 function Get-LanguageOptionCount {
     $condition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
@@ -274,6 +289,8 @@ function Save-WindowScreenshot([string]$Name) {
 try {
     Resize-Client 1024 720
     Click-Control (Find-Control ([System.Windows.Automation.ControlType]::TabItem) 0)
+    Assert-SelectedTab 0 $true
+    Assert-SelectedTab 1 $false
     Invoke-Control (Find-FooterButton)
 
     $language = Find-Control ([System.Windows.Automation.ControlType]::ComboBox)
@@ -298,6 +315,8 @@ try {
     Click-Control (Find-Control ([System.Windows.Automation.ControlType]::Button) 2)
 
     Click-Control (Find-Control ([System.Windows.Automation.ControlType]::TabItem) 1)
+    Assert-SelectedTab 0 $false
+    Assert-SelectedTab 1 $true
     Save-WindowScreenshot 'acceptance-receive-1024x720-current.png'
 
     $ticketInput = Find-Control ([System.Windows.Automation.ControlType]::Edit)
