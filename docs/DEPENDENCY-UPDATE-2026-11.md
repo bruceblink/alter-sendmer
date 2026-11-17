@@ -79,3 +79,9 @@ compilation. The supported runtime_shaders feature was used for local checks; th
 release behavior is unchanged. Native default builds remain covered by the PR's three-OS CI.
 Release packaging/signing/upload workflows were not run, since this task does not authorize
 publishing a new release. See the PR checks for exact remote status and commit.
+
+## CI runner migration
+
+The first PR run exposed the retired `macos-14` runner (`configuration ... not supported`).
+Both CI and release packaging now use the supported stable `macos-26` Arm64 runner.
+Source: https://github.com/actions/runner-images/issues/13518.

@@ -35,7 +35,7 @@ jobs:
           - os: ubuntu-24.04
             artifact: linux-x86_64
             formats: appimage,deb
-          - os: macos-14
+          - os: macos-26
             artifact: macos-aarch64
             formats: app,dmg
     runs-on: ${{ matrix.os }}
