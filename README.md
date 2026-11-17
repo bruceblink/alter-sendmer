@@ -48,7 +48,7 @@ signature embedded in `latest.json` before installing an update.
 
 Requirements:
 
-- Rust `1.95` or newer
+- Rust `1.100` or newer
 - Native GPUI build prerequisites for the target platform
 - `cargo-packager` 0.11.8 when producing native packages
 
@@ -60,8 +60,8 @@ cargo test --workspace --locked
 cargo run
 ```
 
-The application pins GPUI and `gpui_platform` to the same reviewed Zed revision. It consumes the
-published [`sendmer`](https://crates.io/crates/sendmer) `0.10.0` crate through its opaque
+The application pins GPUI and `gpui_platform` to the same stable Zed `v1.28.1` release. It consumes the
+published [`sendmer`](https://crates.io/crates/sendmer) `0.11.0` crate through its opaque
 `SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
 sibling directory or Git revision.
 The optional upload limit is entered in MiB/s and converted to sendmer's shared payload bytes/s limit;

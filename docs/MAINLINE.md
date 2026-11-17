@@ -1,7 +1,7 @@
 # AlterSendmer 主线设计与开发计划
 
 本文是 AlterSendmer 唯一的主线设计与开发计划。它合并了原 GPUI 设计说明与阶段开发计划，
-并与 `sendmer v0.10.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
+并与 `sendmer v0.11.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
 当前架构或未来计划。
 
 ## 1. 术语表与命名约定
@@ -56,7 +56,7 @@ flowchart LR
         EVENT["Event Projection"]
     end
 
-    CORE["sendmer 0.10.0\nPublic API"]
+    CORE["sendmer 0.11.0\nPublic API"]
     NET["iroh / TLS / QUIC / Relay"]
     PEER["Remote sendmer peer"]
     FS["Local Filesystem"]
@@ -127,8 +127,9 @@ Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Com
 
 ### 5.2 事件与错误映射
 
-传输适配器实现 `sendmer::EventEmitter`，经无锁 channel 把事件交给 UI。消费者先校验
-`schema_version`，再确认同一 `session_id` 和严格递增 `sequence`，最后按 `phase` 与载荷更新状态。
+传输适配器实现 `sendmer::EventEmitter`，经无锁 channel 把事件交给 UI。消费者先过滤旧 generation，
+再使用上游 `TransferEventStreamValidator` 校验 schema、session、role、sequence、文件名和终态。
+首次违反契约后保持拒绝，直到用户显式启动新传输并重置验证器；验证通过后才投影 UI。
 
 - `started`、`progress` 和 `file_names` 是非终态。
 - `completed`、`failed`、`cancelled` 是唯一终态。

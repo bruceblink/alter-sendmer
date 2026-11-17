@@ -11,8 +11,8 @@ use gpui::{
     Window, WindowAppearance, div, px, relative, rgb, svg,
 };
 use sendmer::{
-    Role, SendHandle, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferError,
-    TransferErrorCode, TransferEvent, TransferEventData, TransferPhase as CoreTransferPhase,
+    Role, SendHandle, SenderTransferStatus, TransferError, TransferErrorCode, TransferEvent,
+    TransferEventData, TransferEventStreamValidator, TransferPhase as CoreTransferPhase,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -61,7 +61,7 @@ enum TransferPhase {
 }
 
 // Keep the diagnostic contract explicit because Rust does not expose dependency versions at runtime.
-const SENDMER_VERSION: &str = "0.10.0";
+const SENDMER_VERSION: &str = "0.11.0";
 
 impl TransferPhase {
     fn is_active(self) -> bool {
@@ -304,6 +304,7 @@ struct HistoryEntry {
 /// Tracks the public event contract for one role without retaining tickets or local paths.
 #[derive(Clone, Debug, Default)]
 struct EventSessionState {
+    validator: TransferEventStreamValidator,
     session_id: Option<String>,
     sequence: u64,
     error_code: Option<String>,
@@ -315,25 +316,10 @@ struct EventSessionState {
 impl EventSessionState {
     /// Accepts the schema's started-at-one stream and rejects gaps, duplicates, and late events.
     fn accept(&mut self, event: &TransferEvent) -> bool {
-        if event.schema_version != TRANSFER_EVENT_SCHEMA_VERSION {
+        if self.validator.accept(event).is_err() {
             return false;
         }
-        let session_id = event.session_id.as_str();
-        if self.session_id.as_deref() != Some(session_id) {
-            if event.sequence != 1 || !matches!(event.event, TransferEventData::Started) {
-                return false;
-            }
-            *self = Self {
-                session_id: Some(session_id.to_owned()),
-                sequence: 1,
-                ..Self::default()
-            };
-            return true;
-        }
-        let expected = self.sequence.saturating_add(1);
-        if event.sequence != expected {
-            return false;
-        }
+        self.session_id = Some(event.session_id.as_str().to_owned());
         self.sequence = event.sequence;
         true
     }
@@ -4333,10 +4319,17 @@ mod history_tests {
         let mut unsupported_schema = started.clone();
         unsupported_schema.schema_version = TRANSFER_EVENT_SCHEMA_VERSION + 1;
         assert!(!state.accept(&unsupported_schema));
+        assert!(!state.accept(&started)); // Rejection is sticky until an explicit reset.
+        state = EventSessionState::default();
         assert!(state.accept(&started));
-        assert!(!state.accept(&started));
         assert!(state.accept(&progress));
         assert!(!state.accept(&gap));
+        assert!(!state.accept(&progress));
+
+        let mut duplicate = EventSessionState::default();
+        assert!(duplicate.accept(&started));
+        assert!(!duplicate.accept(&started));
+        assert!(!duplicate.accept(&progress));
 
         let unexpected = TransferEvent::new(
             TransferSessionId::new(),
@@ -4351,6 +4344,68 @@ mod history_tests {
             },
         );
         assert!(!EventSessionState::default().accept(&unexpected));
+    }
+
+    #[test]
+    fn event_stream_rejects_session_role_changes_and_events_after_terminal() {
+        let started = TransferEvent::new(
+            TransferSessionId::new(),
+            1,
+            1,
+            Role::Receiver,
+            CoreTransferPhase::Preparing,
+            TransferEventData::Started,
+        );
+        let mut changed_session = started.clone();
+        changed_session.session_id = TransferSessionId::new();
+        let mut state = EventSessionState::default();
+        assert!(state.accept(&started));
+        assert!(!state.accept(&changed_session));
+
+        let mut terminal = started.clone();
+        terminal.sequence = 2;
+        terminal.phase = CoreTransferPhase::Finalizing;
+        terminal.event = TransferEventData::Completed;
+        let mut changed_role = terminal.clone();
+        changed_role.role = Role::Sender;
+        let mut state = EventSessionState::default();
+        assert!(state.accept(&started));
+        assert!(!state.accept(&changed_role));
+        assert!(!state.accept(&terminal));
+
+        let mut state = EventSessionState::default();
+        assert!(state.accept(&started));
+        assert!(state.accept(&terminal));
+        terminal.sequence = 3;
+        assert!(!state.accept(&terminal));
+    }
+
+    #[test]
+    fn event_stream_rejects_unsafe_file_names_before_projection() {
+        for name in [
+            "/private/file",
+            "../secret",
+            "folder/../../secret",
+            "C:\\secret",
+        ] {
+            let started = TransferEvent::new(
+                TransferSessionId::new(),
+                1,
+                1,
+                Role::Receiver,
+                CoreTransferPhase::Preparing,
+                TransferEventData::Started,
+            );
+            let mut names = started.clone();
+            names.sequence = 2;
+            names.event = TransferEventData::FileNames {
+                file_names: vec![name.into()],
+            };
+            let mut state = EventSessionState::default();
+            assert!(state.accept(&started));
+            assert!(!state.accept(&names));
+            assert_eq!(state.sequence, 1);
+        }
     }
 
     #[test]

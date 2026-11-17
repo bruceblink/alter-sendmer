@@ -187,11 +187,15 @@ mod tests {
         assert!(!events.is_empty(), "adapter should forward events");
         assert!(events.iter().all(|(generation, _)| *generation == 41));
         let session_id = events[0].1.session_id.clone();
+        let mut validator = sendmer::TransferEventStreamValidator::new();
         for (index, (_, event)) in events.iter().enumerate() {
             assert_eq!(event.schema_version, TRANSFER_EVENT_SCHEMA_VERSION);
             assert_eq!(event.session_id, session_id);
             assert_eq!(event.sequence, index as u64 + 1);
             assert_eq!(event.role, role);
+            validator
+                .accept(event)
+                .expect("valid upstream event contract");
         }
         assert!(matches!(events[0].1.event, TransferEventData::Started));
     }
@@ -474,6 +478,12 @@ mod tests {
         }
         assert!(!events.is_empty());
         let session_id = events[0].1.session_id.clone();
+        let mut validator = sendmer::TransferEventStreamValidator::new();
+        for (_, event) in &events {
+            validator
+                .accept(event)
+                .expect("valid cancellation event contract");
+        }
         assert!(
             events.iter().all(|(_, event)| {
                 event.role == Role::Receiver && event.session_id == session_id
