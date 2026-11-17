@@ -14,11 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-14, ubuntu-24.04]
+        os: [windows-latest, macos-26, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Install Linux GPUI dependencies
         if: runner.os == 'Linux'
         run: |
@@ -49,9 +49,9 @@ jobs:
             xdg-desktop-portal
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.95"
+          toolchain: "1.100"
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2.9.3
       - name: Test release note generator
         if: runner.os == 'Linux'
         run: python3 .github/scripts/test_generate_release_notes.py

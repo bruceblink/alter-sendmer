@@ -2,36 +2,38 @@
 name = "alter-sendme-gpui"
 version = "0.6.0"
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.100"
 description = "Native GPUI client for AlterSendmer peer-to-peer file transfer"
 repository = "https://github.com/bruceblink/alter-sendmer"
 license = "AGPL-3.0"
 readme = "README.md"
 
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed", rev = "819fe337999551ce8177b14c8db1127645617ae4" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "819fe337999551ce8177b14c8db1127645617ae4", features = ["font-kit"] }
-sendmer = "0.10.0"
-iroh-blobs = "0.103"
-tokio = { version = "1", features = ["full"] }
-async-channel = "2"
-anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-directories = "6"
-walkdir = "2"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+gpui = { git = "https://github.com/zed-industries/zed", tag = "v1.28.1" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.28.1", features = ["font-kit", "wayland", "x11"] }
+sendmer = { version = "0.11.0", default-features = false }
+iroh-blobs = "0.105"
+tokio = { version = "1.54.1", features = ["full"] }
+async-channel = "2.5.0"
+anyhow = "1.0.104"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+directories = "6.0.0"
+walkdir = "2.5.0"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 cargo-packager-updater = "0.2.3"
 
 [build-dependencies]
-serde_json = "1"
-embed-resource = "3.0.11"
+serde_json = "1.0.154"
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3.0.12"
 
 [dev-dependencies]
-iroh = "1.0.3"
-tempfile = "3"
+iroh = "1.4.1"
+tempfile = "3.27.0"
 
 [profile.release]
 lto = "thin"
