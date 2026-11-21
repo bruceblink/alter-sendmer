@@ -1,6 +1,6 @@
 [package]
 name = "alter-sendme-gpui"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 rust-version = "1.100"
 description = "Native GPUI client for AlterSendmer peer-to-peer file transfer"
@@ -46,7 +46,8 @@ identifier = "top.likanug.alter-sendme"
 publisher = "BruceBlink"
 homepage = "https://github.com/bruceblink/alter-sendmer"
 category = "Utility"
-icons = ["assets/alter-sendme@2x.png", "assets/alter-sendme.ico"]
+# macOS 打包优先使用原生 ICNS。PNG 和 ICO 分别用于 Linux 和 Windows。
+icons = ["assets/alter-sendmer-macos.icns", "assets/alter-sendme@2x.png", "assets/alter-sendme.ico"]
 license-file = "LICENSE"
 resources = ["README.md", "PRIVACY.md"]
 before-packaging-command = "cargo build --locked --release"
