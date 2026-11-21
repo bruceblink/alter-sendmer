@@ -103,6 +103,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/package-portable.ps1 -OutputDirectory "dist/${{ matrix.artifact }}" -SkipBuild
+      - name: Normalize release package filenames
+        shell: pwsh
+        run: ./scripts/rename-release-packages.ps1 -Target "${{ matrix.artifact }}" -Directory "dist/${{ matrix.artifact }}"
       - name: Upload package outputs
         uses: actions/upload-artifact@v7.0.2
         with:

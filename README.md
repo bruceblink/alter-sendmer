@@ -84,11 +84,11 @@ Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. macOS bu
 an ad hoc signature on the full application bundle. Gatekeeper may still block an internet download
 until the build is signed with Developer ID and notarized.
 
-Release tags build and sign
-all three operating-system packages, generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore
-bundles, and a GitHub provenance attestation, then publish the complete asset groups. The minisign
-private key is stored only in GitHub Actions secrets; trusted Windows and macOS code-signing
-certificates can be added independently when available.
+Release package filenames use `AlterSendmer-<version>-<platform>-<arch>`, for example
+`AlterSendmer-0.7.2-macos-arm64.dmg`. Release tags build and sign all three operating-system packages,
+generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore bundles, and a GitHub provenance
+attestation, then publish the complete asset groups. The minisign private key is stored only in
+GitHub Actions secrets.
 
 ## Documentation
 

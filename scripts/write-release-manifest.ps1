@@ -62,7 +62,8 @@ $manifest = [ordered]@{
     notes = "AlterSendmer v$versionValue"
     pub_date = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     platforms = [ordered]@{
-        'windows-x86_64' = Resolve-UpdateAsset 'windows-x86_64' '*_x64-setup.exe' 'nsis'
+        # 安装包可使用新版名称或旧版 cargo-packager 名称。
+        'windows-x86_64' = Resolve-UpdateAsset 'windows-x86_64' '*-setup.exe' 'nsis'
         'linux-x86_64' = Resolve-UpdateAsset 'linux-x86_64' '*.AppImage' 'appimage'
         'macos-aarch64' = Resolve-UpdateAsset 'macos-aarch64' '*.app.tar.gz' 'app'
     }
