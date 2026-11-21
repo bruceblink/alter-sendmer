@@ -165,7 +165,8 @@ mod tests {
     use iroh::EndpointAddr;
     use iroh_blobs::{BlobFormat, Hash, ticket::BlobTicket};
     use sendmer::{
-        RelayModeOption, Role, TRANSFER_EVENT_SCHEMA_VERSION, TransferEvent, TransferEventData,
+        RelayModeOption, Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferEvent,
+        TransferEventData,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -225,18 +226,44 @@ mod tests {
                 },
             ))
             .expect("start adapter sender");
-        fs::write(ticket_path, result.ticket().to_string()).expect("publish sender ticket");
+        fs::write(&ticket_path, result.ticket().to_string()).expect("publish sender ticket");
+
+        // 文件用例等待首次发送状态完成，再用原票据启动第二个接收进程。
+        let completion = (!manifest_mode).then(|| {
+            let mut status = result.subscribe_transfer_status();
+            let marker = PathBuf::from(&ticket_path).with_extension("completed");
+            runtime.spawn(async move {
+                tokio::time::timeout(
+                    Duration::from_secs(20),
+                    status.wait_for(|status| *status == SenderTransferStatus::Completed),
+                )
+                .await
+                .expect("first transfer completion deadline")
+                .expect("sender state must remain open");
+                fs::write(marker, b"completed").expect("signal first transfer completion");
+            })
+        });
 
         // Keep the SendHandle alive until the receiver has finished and the parent closes stdin.
         let mut signal = String::new();
         std::io::stdin()
             .read_to_string(&mut signal)
             .expect("wait for sender shutdown signal");
+        if let Some(completion) = completion {
+            runtime.block_on(completion).expect("watch transfer status");
+        }
+        let mut events = Vec::new();
+        while let Ok(event) = event_receiver.try_recv() {
+            events.push(event);
+        }
+        assert!(
+            events.iter().all(|(_, event)| !event.event.is_terminal()),
+            "individual downloads must leave the sender event stream open"
+        );
         runtime
             .block_on(result.close())
             .expect("shut down adapter sender");
 
-        let mut events = Vec::new();
         while let Ok(event) = event_receiver.try_recv() {
             events.push(event);
         }
@@ -290,7 +317,7 @@ mod tests {
         ));
     }
 
-    /// Uses the actual GPUI transfer adapter from two processes and compares the received bytes.
+    /// 核对实际桌面传输适配器。首次发送完成后，同一票据可服务第二个进程。
     #[test]
     fn adapter_transfers_a_file_and_forwards_transfer_events() {
         let source_dir = tempdir().expect("create source directory");
@@ -321,17 +348,37 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
 
-        let receiver_status = Command::new(&test_binary)
-            .args(["--exact", "transfer::tests::worker_receiver", "--nocapture"])
-            .env(WORKER_MODE, "receiver")
-            .env(TICKET_PATH, &ticket_path)
-            .env(OUTPUT_PATH, output_dir.path())
-            .status()
-            .expect("run adapter receiver worker");
-        assert!(
-            receiver_status.success(),
-            "receiver worker failed: {receiver_status}"
-        );
+        for name in ["first", "second"] {
+            let target = output_dir.path().join(name);
+            fs::create_dir(&target).expect("create separate receive directory");
+            let receiver_status = Command::new(&test_binary)
+                .args(["--exact", "transfer::tests::worker_receiver", "--nocapture"])
+                .env(WORKER_MODE, "receiver")
+                .env(TICKET_PATH, &ticket_path)
+                .env(OUTPUT_PATH, &target)
+                .status()
+                .expect("run adapter receiver worker");
+            assert!(
+                receiver_status.success(),
+                "receiver worker failed: {receiver_status}"
+            );
+            let received = target.join("adapter-e2e.txt");
+            assert_eq!(fs::read(received).expect("read received file"), contents);
+
+            if name == "first" {
+                let deadline = Instant::now() + Duration::from_secs(20);
+                while !ticket_path.with_extension("completed").exists() {
+                    assert!(
+                        Instant::now() < deadline,
+                        "first transfer status not reported"
+                    );
+                    if let Some(status) = sender.try_wait().expect("poll sender worker") {
+                        panic!("sender worker exited after first download: {status}");
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
 
         sender
             .stdin
@@ -344,9 +391,6 @@ mod tests {
             sender_status.success(),
             "sender worker failed: {sender_status}"
         );
-
-        let received = output_dir.path().join("adapter-e2e.txt");
-        assert_eq!(fs::read(received).expect("read received file"), contents);
     }
 
     /// Exercises the public TM1 switch across processes and verifies that an empty directory

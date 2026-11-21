@@ -51,6 +51,7 @@
     "fileLabel": "文件：",
     "listeningForConnection": "等待连接中",
     "sharingInProgress": "正在共享",
+    "shareStillActive": "已完成一次传输，原票据仍可用于下载。",
     "transferCompleted": "传输完成",
     "filesBeingTransmitted": "文件正在传输中",
     "preparingForTransport": "正在准备传输...",

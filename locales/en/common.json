@@ -51,6 +51,7 @@
     "fileLabel": "File:",
     "listeningForConnection": "Listening for connection",
     "sharingInProgress": "Sharing in progress",
+    "shareStillActive": "A transfer completed. The same ticket can still be used.",
     "transferCompleted": "Transfer completed",
     "filesBeingTransmitted": "Files are being transmitted",
     "preparingForTransport": "Preparing for transport...",

@@ -1369,12 +1369,43 @@ impl AlterSendmeApp {
     fn apply_send_ready(&mut self, result: Result<SendHandle, String>, cx: &mut Context<Self>) {
         match result {
             Ok(result) => {
+                let mut status_rx = result.subscribe_transfer_status();
                 self.send_abort = None;
-                self.sender_status = result.transfer_status();
+                self.sender_status = SenderTransferStatus::Idle;
                 self.ticket = Some(result.ticket().to_string());
                 self.send_result = Some(result);
                 self.send_phase = TransferPhase::Sharing;
                 self.status = self.status_text("listening", "Listening for a receiver");
+
+                // 单次传输完成由状态订阅报告。结构化终态事件表示整个分享会话结束。
+                let generation = self.generation;
+                let app = cx.entity().downgrade();
+                cx.spawn(move |_, cx: &mut AsyncApp| {
+                    let mut cx = cx.clone();
+                    async move {
+                        loop {
+                            let status = *status_rx.borrow_and_update();
+                            let active = app
+                                .update(&mut cx, |app, cx| {
+                                    if app.generation != generation || app.send_result.is_none() {
+                                        return false;
+                                    }
+                                    if status == SenderTransferStatus::Completed {
+                                        app.mark_share_transfer_completed(cx);
+                                    }
+                                    true
+                                })
+                                .unwrap_or(false);
+                            if !active
+                                || status == SenderTransferStatus::Expired
+                                || status_rx.changed().await.is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                })
+                .detach();
             }
             Err(error) => {
                 self.send_abort = None;
@@ -1386,6 +1417,25 @@ impl AlterSendmeApp {
                 self.status = self.status_text("transfer_failed", "Sharing failed");
             }
         }
+        cx.notify();
+    }
+
+    /// 记录首次传输完成，继续持有原票据和发送端。后续请求沿用同一分享会话。
+    fn mark_share_transfer_completed(&mut self, cx: &mut Context<Self>) {
+        if self.sender_status == SenderTransferStatus::Completed {
+            return;
+        }
+        self.sender_status = SenderTransferStatus::Completed;
+        self.send_phase = TransferPhase::Sharing;
+        self.send_progress.completed_files = self.send_progress.total_files;
+        let path = self.selected_path.clone();
+        let size = self
+            .send_result
+            .as_ref()
+            .map_or(self.send_progress.total, SendHandle::size);
+        self.record_history("sender", path.as_ref(), "completed", Some(size));
+        self.transfer_started_at = None;
+        self.status = self.text("sender.shareStillActive");
         cx.notify();
     }
 
@@ -1898,6 +1948,7 @@ impl AlterSendmeApp {
             }
             TransferEventData::Completed => match role {
                 Role::Sender => {
+                    let recorded = self.sender_status == SenderTransferStatus::Completed;
                     self.sender_status = SenderTransferStatus::Completed;
                     self.completed_stopped = false;
                     self.send_phase = TransferPhase::Completed;
@@ -1913,12 +1964,15 @@ impl AlterSendmeApp {
                     self.transfer_started_at = None;
                     self.status = self.status_text("transfer_completed", "Transfer completed");
                     let path = self.selected_path.clone();
-                    self.record_history(
-                        "sender",
-                        path.as_ref(),
-                        "completed",
-                        Some(self.send_progress.total),
-                    );
+                    if !recorded {
+                        self.record_history(
+                            "sender",
+                            path.as_ref(),
+                            "completed",
+                            Some(self.send_progress.total),
+                        );
+                    }
+                    self.ticket = None;
                 }
                 Role::Receiver => {
                     self.completed_stopped = false;
@@ -1949,6 +2003,15 @@ impl AlterSendmeApp {
                             if sender_expired { "expired" } else { "failed" },
                             Some(self.send_progress.processed),
                         );
+                        self.ticket = None;
+                        // 到期信号先关闭监听。释放句柄时也清理发送端的临时文件。
+                        if let Some(handle) = self.send_result.take() {
+                            tokio::spawn(async move {
+                                if handle.close().await.is_err() {
+                                    tracing::warn!("failed to clean up ended sender session");
+                                }
+                            });
+                        }
                     }
                     Role::Receiver => {
                         // The receive task records the terminal failure once the cleanup result is
@@ -1978,6 +2041,7 @@ impl AlterSendmeApp {
                             "cancelled",
                             Some(self.send_progress.processed),
                         );
+                        self.ticket = None;
                     }
                     Role::Receiver => {
                         self.receive_phase = TransferPhase::Completed;
@@ -2364,7 +2428,11 @@ impl AlterSendmeApp {
                         .flex_col()
                         .gap_3()
                         .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(
-                            if progress.total > 0 {
+                            if self.sender_status == SenderTransferStatus::Completed {
+                                self.text("sender.shareStillActive")
+                            } else if self.send_phase == TransferPhase::Sharing {
+                                self.status.clone()
+                            } else if progress.total > 0 {
                                 format!(
                                     "{:.1}%  {:.1} MB/s",
                                     progress.percentage(),
@@ -2439,16 +2507,19 @@ impl AlterSendmeApp {
             .when(completed, |view| {
                 view.child(completion_card(self, colors, cx))
             })
-            .when(self.ticket.is_some() && !completed, |view| {
-                view.child(ticket_card(
-                    self.ticket.as_deref().unwrap_or_default(),
-                    colors,
-                    self.copy("copy"),
-                    self.text("sender.sendThisTicket"),
-                    cx,
-                    |app, cx| app.copy_ticket(cx),
-                ))
-            })
+            .when(
+                sharing && self.send_result.is_some() && self.ticket.is_some(),
+                |view| {
+                    view.child(ticket_card(
+                        self.ticket.as_deref().unwrap_or_default(),
+                        colors,
+                        self.copy("copy"),
+                        self.text("sender.sendThisTicket"),
+                        cx,
+                        |app, cx| app.copy_ticket(cx),
+                    ))
+                },
+            )
             .into_any_element()
     }
 
@@ -3449,7 +3520,12 @@ fn history_panel(
     let rows = app.history.iter().enumerate().fold(
         div().flex().flex_col().gap_2(),
         |panel, (index, entry)| {
-            let ticket = entry.ticket.clone();
+            // 历史记录仅能复制当前会话仍在使用的票据。
+            let ticket = entry
+                .ticket
+                .as_ref()
+                .filter(|ticket| app.send_result.is_some() && app.ticket.as_ref() == Some(*ticket))
+                .cloned();
             let path = entry.path.clone();
             let mut summary = format!(
                 "{} | {} | {} bytes | {} ms | {}",

@@ -50,6 +50,7 @@
     "fileLabel": "檔案：",
     "listeningForConnection": "等待連線中",
     "sharingInProgress": "正在分享",
+    "shareStillActive": "已完成一次傳輸，原票券仍可用於下載。",
     "transferCompleted": "傳輸完成",
     "filesBeingTransmitted": "檔案正在傳輸中",
     "preparingForTransport": "正在準備傳輸...",
