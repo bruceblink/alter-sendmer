@@ -1,0 +1,127 @@
+{
+  "product": "AlterSendmer",
+  "version_source": {
+    "path": "Cargo.toml",
+    "key": "package.version"
+  },
+  "targets": {
+    "windows-x64": {
+      "formats": [
+        "setup.exe",
+        "portable.zip"
+      ],
+      "minisign": [
+        "setup.exe"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    },
+    "windows-arm64": {
+      "formats": [
+        "setup.exe",
+        "portable.zip"
+      ],
+      "minisign": [
+        "setup.exe"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    },
+    "macos-arm64": {
+      "formats": [
+        "dmg",
+        "app.tar.gz"
+      ],
+      "minisign": [
+        "dmg",
+        "app.tar.gz"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    },
+    "macos-x86_64": {
+      "formats": [
+        "dmg",
+        "app.tar.gz"
+      ],
+      "minisign": [
+        "dmg",
+        "app.tar.gz"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    },
+    "linux-amd64": {
+      "formats": [
+        "deb",
+        "AppImage"
+      ],
+      "minisign": [
+        "deb",
+        "AppImage"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    },
+    "linux-arm64": {
+      "formats": [
+        "deb",
+        "AppImage"
+      ],
+      "minisign": [
+        "deb",
+        "AppImage"
+      ],
+      "package": [
+        "python",
+        "scripts/ci-packages.py",
+        "package"
+      ],
+      "verify": [
+        "python",
+        "scripts/ci-packages.py",
+        "verify"
+      ]
+    }
+  }
+}

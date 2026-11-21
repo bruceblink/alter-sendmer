@@ -22,25 +22,20 @@ if (-not (Test-Path -LiteralPath $artifacts -PathType Container)) {
     throw "Artifacts directory does not exist: $artifacts"
 }
 
-# Finds the single signed installer for one updater target and returns its manifest entry.
+# 使用标准下载名称查找签名，更新协议继续使用 Rust 的架构标识。
 function Resolve-UpdateAsset {
     param(
-        [Parameter(Mandatory = $true)] [string]$TargetFolder,
-        [Parameter(Mandatory = $true)] [string]$Pattern,
+        [Parameter(Mandatory = $true)] [string]$Suffix,
         [Parameter(Mandatory = $true)] [string]$Format
     )
 
-    $matches = @(
-        Get-ChildItem -LiteralPath $artifacts -Recurse -File |
-            Where-Object {
-                $_.FullName -like "*$TargetFolder*" -and $_.Name -like $Pattern
-            }
-    )
-    if ($matches.Count -ne 1) {
-        throw "Expected one $TargetFolder asset matching $Pattern, found $($matches.Count)."
+    $name = "AlterSendmer-$versionValue-$Suffix"
+    $results = @(Get-ChildItem -LiteralPath $artifacts -Recurse -File -Filter $name)
+    if ($results.Count -ne 1) {
+        throw "Expected one $name asset, found $($results.Count)."
     }
 
-    $asset = $matches[0]
+    $asset = $results[0]
     $signaturePath = "$($asset.FullName).sig"
     if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) {
         throw "Signature is missing for $($asset.Name): $signaturePath"
@@ -62,10 +57,12 @@ $manifest = [ordered]@{
     notes = "AlterSendmer v$versionValue"
     pub_date = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     platforms = [ordered]@{
-        # 安装包可使用新版名称或旧版 cargo-packager 名称。
-        'windows-x86_64' = Resolve-UpdateAsset 'windows-x86_64' '*-setup.exe' 'nsis'
-        'linux-x86_64' = Resolve-UpdateAsset 'linux-x86_64' '*.AppImage' 'appimage'
-        'macos-aarch64' = Resolve-UpdateAsset 'macos-aarch64' '*.app.tar.gz' 'app'
+        'windows-x86_64' = Resolve-UpdateAsset 'windows-x64-setup.exe' 'nsis'
+        'windows-aarch64' = Resolve-UpdateAsset 'windows-arm64-setup.exe' 'nsis'
+        'linux-x86_64' = Resolve-UpdateAsset 'linux-amd64.AppImage' 'appimage'
+        'linux-aarch64' = Resolve-UpdateAsset 'linux-arm64.AppImage' 'appimage'
+        'macos-aarch64' = Resolve-UpdateAsset 'macos-arm64.app.tar.gz' 'app'
+        'macos-x86_64' = Resolve-UpdateAsset 'macos-x86_64.app.tar.gz' 'app'
     }
 }
 
@@ -77,11 +74,7 @@ $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
 $checksumPath = Join-Path $manifestDirectory 'SHA256SUMS'
 $releaseFiles = @(
     Get-ChildItem -LiteralPath $artifacts -Recurse -File |
-        Where-Object {
-            $_.Extension -ne '.sig' -and
-            $_.Name -ne 'SHA256SUMS' -and
-            $_.Name -notlike '*.sha256'
-        } |
+        Where-Object { $_.Name -ne 'SHA256SUMS' } |
         Sort-Object Name
 )
 $duplicateNames = $releaseFiles | Group-Object Name | Where-Object Count -gt 1

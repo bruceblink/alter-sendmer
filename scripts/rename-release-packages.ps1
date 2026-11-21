@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('windows-x86_64', 'linux-x86_64', 'macos-aarch64')]
+    [ValidateSet('windows-x86_64', 'windows-aarch64', 'linux-x86_64', 'linux-aarch64', 'macos-aarch64', 'macos-x86_64')]
     [string]$Target,
     [Parameter(Mandatory = $true)]
     [string]$Directory
@@ -16,13 +16,16 @@ if (-not $version) {
 # 按平台匹配 cargo-packager 生成的文件，发布文件名统一包含版本、平台和架构。
 $platform = @{
     'windows-x86_64' = 'windows-x64'
+    'windows-aarch64' = 'windows-arm64'
     'linux-x86_64' = 'linux-amd64'
+    'linux-aarch64' = 'linux-arm64'
     'macos-aarch64' = 'macos-arm64'
+    'macos-x86_64' = 'macos-x86_64'
 }[$Target]
-$suffixes = switch ($Target) {
-    'windows-x86_64' { '-setup.exe' }
-    'linux-x86_64' { '.AppImage', '.deb' }
-    'macos-aarch64' { '.dmg', '.app.tar.gz' }
+$suffixes = switch -Wildcard ($Target) {
+    'windows-*' { '-setup.exe' }
+    'linux-*' { '.AppImage', '.deb' }
+    'macos-*' { '.dmg', '.app.tar.gz' }
 }
 
 foreach ($suffix in $suffixes) {

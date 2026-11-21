@@ -1,53 +1,57 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish a GitHub release after packaging
-        required: false
-        default: false
-        type: boolean
-      tag:
-        description: Existing v-prefixed tag used when publish is enabled
-        required: false
-        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  PYTHONUTF8: "1"
+
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Resolve declared targets
+        id: plan
+        run: python scripts/desktop-packaging.py plan
+
   package:
-    name: Package (${{ matrix.artifact }})
+    needs: plan
+    name: Package (${{ matrix.target }})
+    env:
+      RUSTUP_TOOLCHAIN: stable-${{ matrix.rust_target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: windows-x86_64
-            formats: nsis
-          - os: ubuntu-24.04
-            artifact: linux-x86_64
-            formats: appimage,deb
-          - os: macos-26
-            artifact: macos-aarch64
-            formats: app,dmg
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-      CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
-      CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
       - name: Install Linux GPUI and packaging dependencies
         if: runner.os == 'Linux'
         run: |
@@ -79,69 +83,68 @@ jobs:
             patchelf \
             pipewire \
             xdg-desktop-portal
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2.9.3
-      - name: Install cargo-packager
-        run: cargo install cargo-packager --version 0.11.8 --locked
-      - name: Build signed packages
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: cargo packager --release --formats "${{ matrix.formats }}" --out-dir "dist/${{ matrix.artifact }}"
-      - name: Verify macOS packages
+      - name: Install macOS archive verifier
         if: runner.os == 'macOS'
         shell: bash
-        run: |
-          # 检查安装映像，并解开更新归档，确认签名覆盖整个应用包。
-          packages="dist/${{ matrix.artifact }}"
-          hdiutil verify "$packages/"*.dmg
-          codesign --verify --strict "$packages/"*.dmg
-          extracted=$(mktemp -d)
-          trap 'rm -rf "$extracted"' EXIT
-          tar -xzf "$packages/AlterSendmer.app.tar.gz" -C "$extracted"
-          codesign --verify --deep --strict "$extracted/AlterSendmer.app"
-      - name: Build Windows portable archive
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/package-portable.ps1 -OutputDirectory "dist/${{ matrix.artifact }}" -SkipBuild
-      - name: Normalize release package filenames
-        shell: pwsh
-        run: ./scripts/rename-release-packages.ps1 -Target "${{ matrix.artifact }}" -Directory "dist/${{ matrix.artifact }}"
-      - name: Upload package outputs
-        uses: actions/upload-artifact@v7.0.2
+        run: command -v 7zz || brew install sevenzip
+      - name: Install native Rust stable
+        run: rustup toolchain install stable-${{ matrix.rust_target }} --profile minimal
+      - uses: Swatinem/rust-cache@v2.9.3
         with:
-          name: release-${{ matrix.artifact }}
+          key: ${{ matrix.target }}
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --version 0.11.8 --locked
+      - name: Build and verify target packages
+        env:
+          TARGET_ID: ${{ matrix.target }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          STAGED_PACKAGES: ${{ runner.temp }}/desktop-package-output
+        # 保留项目本身的依赖安装、打包和验收入口。
+        run: python scripts/desktop-packaging.py package --target "${{ env.TARGET_ID }}" --output "${{ env.STAGED_PACKAGES }}"
+      - name: Upload target packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-package-${{ matrix.target }}
+          path: ${{ runner.temp }}/desktop-package-output/*
           if-no-files-found: error
-          retention-days: 7
-          path: |
-            dist/${{ matrix.artifact }}/*.exe
-            dist/${{ matrix.artifact }}/*.zip
-            dist/${{ matrix.artifact }}/*.AppImage
-            dist/${{ matrix.artifact }}/*.deb
-            dist/${{ matrix.artifact }}/*.dmg
-            dist/${{ matrix.artifact }}/*.app.tar.gz
-            dist/${{ matrix.artifact }}/*.sig
-            dist/${{ matrix.artifact }}/*.sha256
+          overwrite: true
 
-  publish:
-    name: Publish release
-    needs: package
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish && inputs.tag != '')
+  bundle:
+    needs: [plan, package]
     runs-on: ubuntu-24.04
+    name: Verify release assets
+    timeout-minutes: 45
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      RELEASE_TAG: v${{ needs.plan.outputs.version }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          ref: ${{ env.RELEASE_TAG }}
-      - uses: actions/download-artifact@v8.0.2
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          pattern: release-*
-          path: dist
+          python-version: "3.13"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-package-*
+          path: ${{ runner.temp }}/desktop-package-input
+          merge-multiple: false
+      - name: Collect and verify packages
+        shell: bash
+        run: |
+          # 验证全部目标、便携包摘要以及客户端实际使用的更新签名。
+          set -euo pipefail
+          python scripts/desktop-packaging.py collect --input "$RUNNER_TEMP/desktop-package-input" --output dist
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          python scripts/ci-packages.py minisign dist
       - name: Collect release subjects
         shell: bash
         env:
@@ -212,6 +215,7 @@ jobs:
       - name: Store provenance bundle
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
           PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -229,20 +233,46 @@ jobs:
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
               --source-ref "$WORKFLOW_REF"
           done < <(find "$RUNNER_TEMP/alter-sendmer-subjects" -type f -print0 | sort -z)
-      - name: Set up Python
-        uses: actions/setup-python@v7.1.0
-        with:
-          python-version: "3.x"
-      - name: Generate release notes
-        env:
-          RELEASE_TAG: ${{ env.RELEASE_TAG }}
-        run: |
-          python3 .github/scripts/generate_release_notes.py \
-            --tag "$RELEASE_TAG" \
-            --output release-notes.md
       - name: Build signed update manifest and checksums
         shell: pwsh
         run: ./scripts/write-release-manifest.ps1 -Version "$env:RELEASE_TAG" -ArtifactsDirectory dist -OutputPath dist/latest.json
+      - name: Check final hashes and upload verified assets
+        shell: bash
+        run: |
+          cd dist
+          sha256sum --check SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-release-bundle
+          path: dist/*
+          if-no-files-found: error
+          overwrite: true
+
+  publish:
+    name: Publish release
+    needs: [plan, bundle]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: v${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-release-bundle
+          path: dist
+      - name: Verify downloaded release bundle
+        run: |
+          cd dist
+          sha256sum --check SHA256SUMS
+      - name: Generate release notes
+        run: python3 .github/scripts/generate_release_notes.py --tag "$RELEASE_TAG" --output release-notes.md
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v3.0.4
         with:
@@ -250,17 +280,4 @@ jobs:
           body_path: release-notes.md
           generate_release_notes: false
           fail_on_unmatched_files: true
-          files: |
-            dist/**/*.exe
-            dist/**/*.zip
-            dist/**/*.AppImage
-            dist/**/*.deb
-            dist/**/*.dmg
-            dist/**/*.app.tar.gz
-            dist/**/*.sig
-            dist/**/*.sha256
-            dist/**/*.spdx.json
-            dist/**/*.sigstore.json
-            dist/**/*.attestation.json
-            dist/latest.json
-            dist/SHA256SUMS
+          files: dist/*

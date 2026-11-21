@@ -3,6 +3,8 @@ param(
     [string]$Configuration = 'release',
     [string]$Version = '',
     [string]$OutputDirectory = '',
+    [ValidateSet('x64', 'arm64')]
+    [string]$Architecture = 'x64',
     [switch]$SkipBuild
 )
 
@@ -39,7 +41,7 @@ Copy-Item -LiteralPath (Join-Path $root 'PRIVACY.md') -Destination (Join-Path $s
 
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 # 与其他发布安装包使用相同的平台和架构名称，校验文件记录最终文件名。
-$archive = Join-Path $output "AlterSendmer-$versionValue-windows-x64-portable.zip"
+$archive = Join-Path $output "AlterSendmer-$versionValue-windows-$Architecture-portable.zip"
 if (Test-Path -LiteralPath $archive) {
     Remove-Item -LiteralPath $archive -Force
 }

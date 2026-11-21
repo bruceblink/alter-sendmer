@@ -160,16 +160,17 @@ Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Com
 
 | 平台 | 发布资产 |
 | --- | --- |
-| Windows x86_64 | NSIS 安装器、portable ZIP、更新归档 |
-| Linux x86_64 | AppImage、DEB、更新归档 |
-| macOS Apple Silicon | app 更新归档、DMG |
+| Windows x64、ARM64 | NSIS 安装器、便携 ZIP。自动更新使用 NSIS 安装器 |
+| Linux amd64、ARM64 | AppImage、DEB。自动更新使用 AppImage |
+| macOS Apple Silicon、Intel | DMG、应用更新归档 |
 
 更新归档由 cargo-packager 使用同一 minisign 信任链签名；`latest.json` 按 `OS-ARCH` 映射下载
 地址、签名和安装格式。客户端只在签名验证通过后进入安装路径；启动时静默检查，用户主动检查
 时才展示最新状态或错误。
 
-CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Release 必须在三个原生
-runner 上构建并上传资产，不能用交叉编译代替平台打包验收。每个发布批次同时上传包、
+CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Release 在六个原生执行器
+上构建，核对安装包中的二进制架构。汇总作业使用应用内置公钥验证更新签名，并验证最终校验和。
+每个发布批次同时上传包、
 `SHA256SUMS`、SPDX SBOM、Sigstore bundle 和 GitHub provenance attestation；签名与证明校验
 失败时停止发布。Release 正文由 tag 提交范围生成，重跑同一 tag 时幂等更新。
 

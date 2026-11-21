@@ -38,7 +38,9 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 
 ## Install
 
-Download the Windows NSIS installer or portable ZIP, Linux AppImage or DEB, and macOS DMG from
+Download installers from the Release for Windows x64 and ARM64, Linux amd64 and ARM64, or macOS
+Apple Silicon and Intel. Windows offers NSIS and portable ZIP, Linux offers AppImage and DEB,
+and macOS offers a DMG. See
 [GitHub Releases](https://github.com/bruceblink/alter-sendmer/releases/latest). `SHA256SUMS` covers
 the published packages and supply-chain evidence. Releases also contain an SPDX SBOM, Sigstore
 signature bundles, and a GitHub provenance attestation; the application verifies the minisign
