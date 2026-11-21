@@ -80,7 +80,11 @@ cargo packager --release --formats nsis --out-dir dist/windows-x86_64
 .\scripts\package-portable.ps1 -SkipBuild
 ```
 
-Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. Release tags build and sign
+Use `--formats appimage,deb` on Linux and `--formats app,dmg` on macOS. macOS builds apply and verify
+an ad hoc signature on the full application bundle. Gatekeeper may still block an internet download
+until the build is signed with Developer ID and notarized.
+
+Release tags build and sign
 all three operating-system packages, generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore
 bundles, and a GitHub provenance attestation, then publish the complete asset groups. The minisign
 private key is stored only in GitHub Actions secrets; trusted Windows and macOS code-signing

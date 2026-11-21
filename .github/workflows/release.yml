@@ -87,6 +87,18 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: cargo packager --release --formats "${{ matrix.formats }}" --out-dir "dist/${{ matrix.artifact }}"
+      - name: Verify macOS packages
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # 检查安装映像，并解开更新归档，确认签名覆盖整个应用包。
+          packages="dist/${{ matrix.artifact }}"
+          hdiutil verify "$packages/"*.dmg
+          codesign --verify --strict "$packages/"*.dmg
+          extracted=$(mktemp -d)
+          trap 'rm -rf "$extracted"' EXIT
+          tar -xzf "$packages/AlterSendmer.app.tar.gz" -C "$extracted"
+          codesign --verify --deep --strict "$extracted/AlterSendmer.app"
       - name: Build Windows portable archive
         if: runner.os == 'Windows'
         shell: pwsh
