@@ -140,6 +140,22 @@ def commit_link(repository: str, sha: str, subject: str) -> str:
     return subject
 
 
+def release_highlights(tag: str) -> str:
+    """读取标签中 CHANGELOG.md 的首段。旧标签可以没有此文件。"""
+    if not git("ls-tree", "--name-only", tag, "--", "CHANGELOG.md").strip():
+        return ""
+
+    lines = git("show", f"{tag}:CHANGELOG.md").strip().splitlines()
+    header = f"AlterSendmer {tag}"
+    if not lines or lines[0] != header:
+        raise SystemExit(f"CHANGELOG.md must start with {header}")
+    # 标签对应的文件保留该版本的发布说明，历史版本留在文件中供查阅。
+    for index, line in enumerate(lines[1:], start=1):
+        if line.startswith("AlterSendmer v"):
+            return "\n".join(lines[:index]).rstrip()
+    return "\n".join(lines)
+
+
 def render(
     tag: str,
     base: str | None,
@@ -209,6 +225,9 @@ def main() -> None:
         github_repository(args.repository),
         args.date or release_date(args.tag),
     )
+    highlights = release_highlights(args.tag)
+    if highlights:
+        body = f"{body.rstrip()}\n\n---\n\n{highlights}\n"
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(body, encoding="utf-8")
