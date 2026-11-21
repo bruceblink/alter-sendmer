@@ -49,7 +49,6 @@ jobs:
             xdg-desktop-portal
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.100"
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2.9.3
       - name: Test release note generator

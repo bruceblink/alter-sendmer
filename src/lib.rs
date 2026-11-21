@@ -5,7 +5,7 @@ mod locale;
 mod transfer;
 mod updater;
 
-use gpui::*;
+use gpui_kit::*;
 use std::{
     borrow::Cow,
     time::{Duration, Instant},
@@ -54,7 +54,7 @@ pub fn run(_started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
     let _runtime_guard = runtime.enter();
-    gpui_platform::application()
+    gpui_kit::application()
         .with_assets(AppAssets)
         .run(move |cx| {
             cx.set_menus(vec![Menu {

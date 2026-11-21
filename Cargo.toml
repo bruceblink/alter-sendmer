@@ -9,8 +9,8 @@ license = "AGPL-3.0"
 readme = "README.md"
 
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed", tag = "v1.28.1" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", tag = "v1.28.1", features = ["font-kit", "wayland", "x11"] }
+# 通过 Kit 加载原生后端，沿用应用自己的控件和资源。
+gpui-kit = { version = "0.10.0", default-features = false }
 sendmer = { version = "0.11.0", default-features = false }
 iroh-blobs = "0.105"
 tokio = { version = "1.54.1", features = ["full"] }
@@ -19,7 +19,7 @@ anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 directories = "6.0.0"
-walkdir = "2.5.0"
+walkdir = "2.5.1"
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
@@ -32,7 +32,7 @@ serde_json = "1.0.154"
 embed-resource = "3.0.12"
 
 [dev-dependencies]
-iroh = "1.4.1"
+iroh = "1.5.0"
 tempfile = "3.27.0"
 
 [profile.release]

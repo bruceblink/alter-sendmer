@@ -60,7 +60,7 @@ cargo test --workspace --locked
 cargo run
 ```
 
-The application pins GPUI and `gpui_platform` to the same stable Zed `v1.28.1` release. It consumes the
+The application uses the published `gpui-kit` 0.10.0 crate for GPUI and its native backends. It consumes the
 published [`sendmer`](https://crates.io/crates/sendmer) `0.11.0` crate through its opaque
 `SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
 sibling directory or Git revision.

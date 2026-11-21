@@ -4,8 +4,8 @@ use crate::locale::Locale;
 use crate::transfer;
 use crate::updater::{self, AvailableUpdate};
 use async_channel::{Receiver, Sender};
-use gpui::prelude::*;
-use gpui::{
+use gpui_kit::prelude::*;
+use gpui_kit::{
     AsyncApp, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
     FontWeight, KeyDownEvent, PathPromptOptions, Render, Rgba, Role as A11yRole, UTF16Selection,
     Window, WindowAppearance, div, px, relative, rgb, svg,
@@ -473,11 +473,13 @@ impl AlterSendmeApp {
             sender_status: SenderTransferStatus::Idle,
         };
         let entity = cx.entity().downgrade();
-        cx.spawn(move |_this: gpui::WeakEntity<Self>, cx: &mut AsyncApp| {
-            let mut cx = cx.clone();
-            let receiver = event_receiver;
-            async move { pump_events(entity, receiver, &mut cx).await }
-        })
+        cx.spawn(
+            move |_this: gpui_kit::WeakEntity<Self>, cx: &mut AsyncApp| {
+                let mut cx = cx.clone();
+                let receiver = event_receiver;
+                async move { pump_events(entity, receiver, &mut cx).await }
+            },
+        )
         .detach();
         // Match the legacy client by checking quietly on startup. Only an available update is
         // surfaced; offline and up-to-date startup checks stay out of the transfer workflow.
@@ -2000,7 +2002,7 @@ impl AlterSendmeApp {
         label: &'static str,
         colors: Palette,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
         let active = self.tab == tab;
         div()
             .id(label)
@@ -2045,13 +2047,13 @@ impl AlterSendmeApp {
 
     fn button(
         &self,
-        id: impl Into<gpui::ElementId>,
+        id: impl Into<gpui_kit::ElementId>,
         label: impl Into<String>,
         enabled: bool,
         colors: Palette,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
         let id = id.into();
         let label = label.into();
         let destructive = id.to_string().contains("stop");
@@ -2104,13 +2106,13 @@ impl AlterSendmeApp {
     /// Renders a restrained secondary command without competing with the primary transfer action.
     fn secondary_button(
         &self,
-        id: impl Into<gpui::ElementId>,
+        id: impl Into<gpui_kit::ElementId>,
         label: String,
         enabled: bool,
         colors: Palette,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
         div()
             .id(id)
             .focusable()
@@ -2140,13 +2142,13 @@ impl AlterSendmeApp {
 
     fn utility_button(
         &self,
-        id: impl Into<gpui::ElementId>,
+        id: impl Into<gpui_kit::ElementId>,
         label: String,
         active: bool,
         colors: Palette,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
         div()
             .id(id)
             .focusable()
@@ -2180,13 +2182,13 @@ impl AlterSendmeApp {
 
     fn preference_button(
         &self,
-        id: impl Into<gpui::ElementId>,
+        id: impl Into<gpui_kit::ElementId>,
         label: String,
         value: String,
         colors: Palette,
         cx: &mut Context<Self>,
         action: impl Fn(&mut Self, &mut Context<Self>) + 'static,
-    ) -> gpui::Stateful<gpui::Div> {
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
         div()
             .id(id)
             .focusable()
@@ -2656,7 +2658,7 @@ impl AlterSendmeApp {
 }
 
 /// Renders one numbered receive step so the idle screen reads as a single linear workflow.
-fn receive_step_heading(number: &'static str, title: String, colors: Palette) -> gpui::Div {
+fn receive_step_heading(number: &'static str, title: String, colors: Palette) -> gpui_kit::Div {
     div()
         .flex()
         .items_center()
@@ -2692,7 +2694,7 @@ fn quiet_text_button(
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
     action: impl Fn(&mut AlterSendmeApp, &mut Context<AlterSendmeApp>) + 'static,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_kit::Stateful<gpui_kit::Div> {
     div()
         .id(id)
         .focusable()
@@ -2713,7 +2715,7 @@ fn quiet_text_button(
 }
 
 async fn pump_events(
-    entity: gpui::WeakEntity<AlterSendmeApp>,
+    entity: gpui_kit::WeakEntity<AlterSendmeApp>,
     receiver: Receiver<(u64, TransferEvent)>,
     cx: &mut AsyncApp,
 ) {
@@ -3193,15 +3195,15 @@ impl EntityInputHandler for AlterSendmeApp {
     fn bounds_for_range(
         &mut self,
         _range: Range<usize>,
-        bounds: Bounds<gpui::Pixels>,
+        bounds: Bounds<gpui_kit::Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
-    ) -> Option<Bounds<gpui::Pixels>> {
+    ) -> Option<Bounds<gpui_kit::Pixels>> {
         Some(bounds)
     }
     fn character_index_for_point(
         &mut self,
-        _point: gpui::Point<gpui::Pixels>,
+        _point: gpui_kit::Point<gpui_kit::Pixels>,
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
@@ -3298,7 +3300,7 @@ struct Palette {
     danger: Rgba,
 }
 
-fn progress_bar(progress: &Progress, colors: Palette) -> gpui::Div {
+fn progress_bar(progress: &Progress, colors: Palette) -> gpui_kit::Div {
     // Keep the fill proportional to its parent so the bar remains usable at the
     // minimum window size instead of overflowing a fixed pixel width.
     let fraction = progress_fraction(progress);
@@ -3335,7 +3337,7 @@ fn ticket_card(
     ticket_hint: String,
     cx: &mut Context<AlterSendmeApp>,
     action: impl Fn(&mut AlterSendmeApp, &mut Context<AlterSendmeApp>) + 'static,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .flex_col()
@@ -3377,7 +3379,7 @@ fn completion_card(
     app: &AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .flex_col()
@@ -3443,7 +3445,7 @@ fn history_panel(
     app: &mut AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     let rows = app.history.iter().enumerate().fold(
         div().flex().flex_col().gap_2(),
         |panel, (index, entry)| {
@@ -3532,7 +3534,7 @@ fn preferences_panel(
     app: &mut AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Div {
+) -> gpui_kit::Div {
     div()
         .flex()
         .flex_col()
@@ -3641,7 +3643,7 @@ fn upload_rate_control(
     app: &mut AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_kit::Stateful<gpui_kit::Div> {
     let unlimited = app.preferences.max_upload_rate_mib_per_sec.is_none();
     let label = app.text("preferences.uploadRate");
     let unlimited_label = app.text("preferences.unlimited");
@@ -3747,7 +3749,7 @@ fn upload_rate_control(
                                 app.focus_upload_rate(window, cx)
                             }),
                         )
-                        .child(gpui::canvas(
+                        .child(gpui_kit::canvas(
                             move |bounds, _, _| bounds,
                             move |bounds, _, window, cx| {
                                 window.handle_input(
@@ -3773,7 +3775,7 @@ fn locale_menu(
     app: &mut AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_kit::Stateful<gpui_kit::Div> {
     let ordered_locales = std::iter::once(app.locale)
         .chain(
             Locale::all()
@@ -3876,7 +3878,7 @@ fn locale_menu(
 }
 
 /// Builds a compact numbered disclosure so receive guidance never looks like a primary action.
-fn receiver_help_panel(app: &AlterSendmeApp, colors: Palette) -> gpui::Div {
+fn receiver_help_panel(app: &AlterSendmeApp, colors: Palette) -> gpui_kit::Div {
     let instructions = [
         app.text("receiver.instruction1"),
         app.text("receiver.instruction2"),
@@ -3926,7 +3928,7 @@ fn ticket_input(
     app: &mut AlterSendmeApp,
     colors: Palette,
     cx: &mut Context<AlterSendmeApp>,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_kit::Stateful<gpui_kit::Div> {
     let entity = cx.entity();
     let focus = app.ticket_focus.clone();
     let click_focus = focus.clone();
@@ -3947,7 +3949,7 @@ fn ticket_input(
         .bg(colors.background)
         .cursor_pointer()
         .on_click(cx.listener(move |_, _, window, cx| click_focus.focus(window, cx)))
-        .child(gpui::canvas(
+        .child(gpui_kit::canvas(
             move |bounds, _, _| bounds,
             move |bounds, _, window, cx| {
                 window.handle_input(&focus, ElementInputHandler::new(bounds, entity.clone()), cx);
