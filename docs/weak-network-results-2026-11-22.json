@@ -9,7 +9,10 @@
       "CAP_NET_ADMIN",
       "CAP_NET_RAW"
     ],
-    "fixture_sizes_bytes": [33554432, 8388608]
+    "fixture_sizes_bytes": [
+      33554432,
+      8388608
+    ]
   },
   "results": [
     {
@@ -72,5 +75,9 @@
   "final_sha256": "11606d850462813d089044c75decd1b1eeb068bfdfa42630f13f2b97153fff5b",
   "sha256_fixture": "deterministic bytes index*31 modulo 256",
   "cache_cleanup": "passed after removing residue from an intentionally interrupted composite run",
-  "protocol_reconnect_count": "unavailable from sendmer 0.11.0 public events. forced_outage_recoveries records the injected outage recovery."
+  "protocol_reconnect_count": "unavailable from sendmer 0.11.0 public events. forced_outage_recoveries records the injected outage recovery.",
+  "fixture_sha256": {
+    "8388608": "11606d850462813d089044c75decd1b1eeb068bfdfa42630f13f2b97153fff5b",
+    "33554432": "97d9ad2a6135a80ae7adfe5debe163064a10bac3b361d6472ef56d7e422070ac"
+  }
 }
