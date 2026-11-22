@@ -281,6 +281,44 @@ impl Progress {
         }
         format!("{}/{} {unit}", self.completed_files, self.total_files)
     }
+
+    /// Formats the byte counters and current throughput for the active transfer view.
+    fn transfer_stats_label(&self) -> String {
+        format!(
+            "{} / {} · {}",
+            format_bytes(self.processed),
+            format_bytes(self.total),
+            format_bytes_per_second(self.speed),
+        )
+    }
+}
+
+/// Uses decimal units so the displayed value follows the speed unit used by sendmer events.
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit_index = 0;
+    while value >= 1_000.0 && unit_index < UNITS.len() - 1 {
+        value /= 1_000.0;
+        unit_index += 1;
+    }
+    if unit_index == 0 {
+        format!("{bytes} B")
+    } else if value >= 100.0 {
+        format!("{value:.0} {}", UNITS[unit_index])
+    } else if value >= 10.0 {
+        format!("{value:.1} {}", UNITS[unit_index])
+    } else {
+        format!("{value:.2} {}", UNITS[unit_index])
+    }
+}
+
+/// Converts sendmer's floating point throughput into a stable user-facing rate string.
+fn format_bytes_per_second(speed: f64) -> String {
+    if !speed.is_finite() || speed <= 0.0 {
+        return "0 B/s".to_owned();
+    }
+    format!("{}/s", format_bytes(speed.round() as u64))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -661,9 +699,12 @@ impl AlterSendmeApp {
 
     fn choose_send_path(&mut self, cx: &mut Context<Self>) {
         let prompt = self.text("sender.browseFile");
+        // Windows 的系统选择器在同时启用文件和文件夹时会强制切换为文件夹模式。
+        // 读取平台能力后关闭混合模式，确保文件选择仍然可用。
+        let directories = cx.can_select_mixed_files_and_dirs();
         let prompt = cx.prompt_for_paths(PathPromptOptions {
             files: true,
-            directories: true,
+            directories,
             multiple: false,
             prompt: Some(prompt.into()),
         });
@@ -710,12 +751,15 @@ impl AlterSendmeApp {
     /// Opens a completed download in the platform file manager.
     fn reveal_completed_path(&mut self, cx: &mut Context<Self>) {
         if let Some(path) = self.completed_path.as_ref() {
-            let reveal_target = if path.is_dir() {
+            // Windows Explorer needs a direct folder path for this action. Opening the
+            // containing directory also handles received files whose parent has non-ASCII
+            // characters and avoids selecting a directory from its own parent.
+            let folder = if path.is_dir() {
                 path.clone()
             } else {
                 path.parent().unwrap_or(path).to_path_buf()
             };
-            cx.reveal_path(&reveal_target);
+            cx.open_with_system(&folder);
             self.status = self.status_text("download_completed", "Opened folder");
             cx.notify();
         }
@@ -952,7 +996,7 @@ impl AlterSendmeApp {
             } else {
                 path.parent().unwrap_or(&path).to_path_buf()
             };
-            cx.reveal_path(&target);
+            cx.open_with_system(&target);
             self.status = self.text("sender.folderOpened");
             cx.notify();
         }
@@ -2444,6 +2488,12 @@ impl AlterSendmeApp {
                         ))
                         .child(progress_bar(&progress, colors))
                         .child(
+                            div()
+                                .text_xs()
+                                .text_color(colors.muted)
+                                .child(progress.transfer_stats_label()),
+                        )
+                        .child(
                             div().text_xs().text_color(colors.muted).child(
                                 progress
                                     .current_name
@@ -2698,6 +2748,12 @@ impl AlterSendmeApp {
                         .child(receive_name.clone()),
                 )
                 .child(progress_bar(&progress, colors))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(colors.muted)
+                        .child(progress.transfer_stats_label()),
+                )
                 .child(
                     div().text_xs().text_color(colors.muted).child(
                         progress
