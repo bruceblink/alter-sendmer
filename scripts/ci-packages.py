@@ -78,7 +78,8 @@ def verify(target, output, scratch):
         run("tar", "-xzf", str(output / f"{stem}.app.tar.gz"), "-C", str(scratch))
         for app in (scratch / "AlterSendmer.app", scratch / "dmg/AlterSendmer/AlterSendmer.app"):
             run("codesign", "--verify", "--deep", "--strict", str(app))
-            run("lipo", "-verify_arch", architecture, str(app / "Contents/MacOS/alter-sendme-gpui"))
+            # macOS lipo 的输入文件位于命令参数之前，错误顺序会把文件路径当作架构名。
+            run("lipo", str(app / "Contents/MacOS/alter-sendme-gpui"), "-verify_arch", architecture)
     else:
         deb, image = output / f"{stem}.deb", output / f"{stem}.AppImage"
         metadata_arch = run("dpkg-deb", "--field", str(deb), "Architecture", capture_output=True, text=True)
