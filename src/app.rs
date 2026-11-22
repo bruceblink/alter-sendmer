@@ -722,6 +722,28 @@ impl AlterSendmeApp {
         .detach();
     }
 
+    fn choose_send_folder(&mut self, cx: &mut Context<Self>) {
+        let prompt = self.text("transfer.folder");
+        let prompt = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some(prompt.into()),
+        });
+        let app = cx.entity().downgrade();
+        cx.spawn(move |_, cx: &mut AsyncApp| {
+            let mut cx = cx.clone();
+            async move {
+                if let Ok(Ok(Some(paths))) = prompt.await
+                    && let Some(path) = paths.into_iter().next()
+                {
+                    let _ = app.update(&mut cx, |app, cx| app.select_path(path, cx));
+                }
+            }
+        })
+        .detach();
+    }
+
     fn choose_save_path(&mut self, cx: &mut Context<Self>) {
         let prompt = self.text("receiver.saveToFolder");
         let prompt = cx.prompt_for_paths(PathPromptOptions {
@@ -2437,6 +2459,16 @@ impl AlterSendmeApp {
                                 .text_color(colors.muted)
                                 .child(self.text("sender.orBrowse")),
                         )
+                        .when(!cx.can_select_mixed_files_and_dirs(), |view| {
+                            view.child(self.button(
+                                "send-browse-folder",
+                                self.text("transfer.folder"),
+                                true,
+                                colors,
+                                cx,
+                                |app, cx| app.choose_send_folder(cx),
+                            ))
+                        })
                         .child(
                             div()
                                 .text_xs()
