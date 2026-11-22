@@ -62,12 +62,12 @@ def verify(target, output, scratch):
         expected = {"x64": 0x8664, "arm64": 0xAA64}[architecture]
         installer = output / f"{stem}-setup.exe"
         sevenzip = shutil.which("7z") or str(Path(os.environ["ProgramFiles"]) / "7-Zip/7z.exe")
-        run(sevenzip, "x", "-y", f"-o{scratch / 'installer'}", str(installer), "alter-sendme-gpui.exe")
+        run(sevenzip, "x", "-y", f"-o{scratch / 'installer'}", str(installer), "alter-sendmer.exe")
         with zipfile.ZipFile(output / f"{stem}-portable.zip") as archive:
             if archive.testzip() is not None:
                 raise ValueError("便携 ZIP 内容校验失败。")
             portable = Path(archive.extract("AlterSendmer.exe", scratch / "portable"))
-        for executable in (portable, scratch / "installer/alter-sendme-gpui.exe"):
+        for executable in (portable, scratch / "installer/alter-sendmer.exe"):
             if pe_machine(executable) != expected:
                 raise ValueError(f"二进制架构不匹配 {executable}")
     elif platform == "macos":
@@ -79,7 +79,7 @@ def verify(target, output, scratch):
         for app in (scratch / "AlterSendmer.app", scratch / "dmg/AlterSendmer/AlterSendmer.app"):
             run("codesign", "--verify", "--deep", "--strict", str(app))
             # macOS lipo 的输入文件位于命令参数之前，错误顺序会把文件路径当作架构名。
-            run("lipo", str(app / "Contents/MacOS/alter-sendme-gpui"), "-verify_arch", architecture)
+            run("lipo", str(app / "Contents/MacOS/alter-sendmer"), "-verify_arch", architecture)
     else:
         deb, image = output / f"{stem}.deb", output / f"{stem}.AppImage"
         metadata_arch = run("dpkg-deb", "--field", str(deb), "Architecture", capture_output=True, text=True)
@@ -88,8 +88,8 @@ def verify(target, output, scratch):
         run("dpkg-deb", "--extract", str(deb), str(scratch / "deb"))
         run(str(image), "--appimage-extract", cwd=scratch, stdout=subprocess.DEVNULL)
         expected = {"amd64": "Advanced Micro Devices X86-64", "arm64": "AArch64"}[architecture]
-        for executable in (image, scratch / "deb/usr/bin/alter-sendme-gpui",
-                           scratch / "squashfs-root/usr/bin/alter-sendme-gpui"):
+        for executable in (image, scratch / "deb/usr/bin/alter-sendmer",
+                           scratch / "squashfs-root/usr/bin/alter-sendmer"):
             header = run("readelf", "-h", str(executable), capture_output=True, text=True,
                          env={**os.environ, "LC_ALL": "C"}).stdout
             if not re.search(rf"^\s*Machine:\s+{expected}$", header, re.MULTILINE):

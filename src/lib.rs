@@ -28,7 +28,7 @@ impl AssetSource for AppAssets {
     }
 }
 
-actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
+actions!(alter_sendmer, [Quit, Tab, TabPrev]);
 
 /// Starts the native window and installs the same quit bindings used by flash-shot.
 ///
@@ -37,9 +37,8 @@ actions!(alter_sendme_gpui, [Quit, Tab, TabPrev]);
 pub fn run(_started_at: Instant) -> Result<(), Box<dyn std::error::Error>> {
     // Install one process-wide tracing subscriber so sendmer cleanup and connection diagnostics
     // remain visible without writing tickets or file contents to persistent logs.
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        tracing_subscriber::EnvFilter::new("alter_sendme_gpui=info,sendmer=info")
-    });
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("alter_sendmer=info,sendmer=info"));
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)

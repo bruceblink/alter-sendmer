@@ -73,7 +73,7 @@ public static class AlterSendmeUiCaptureNative {
 $process = if ($ProcessId) {
     Get-Process -Id $ProcessId
 } else {
-    Get-Process alter-sendme-gpui | Select-Object -First 1
+    Get-Process alter-sendmer | Select-Object -First 1
 }
 $window = $process.MainWindowHandle
 if ($window -eq [IntPtr]::Zero) {

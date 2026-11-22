@@ -18,7 +18,7 @@
 | 上传速率上限 | Upload Rate Limit | 一个 sender 对所有接收方共享的 payload 上限 | 不是每个 peer 的独立配额或精确 QoS |
 | 持久接收缓存 | Persistent Receive Cache | 由 sendmer 保留已验证数据，供后续 receive 进程恢复 | 不是云存储、永久会话或跨设备同步 |
 
-公开产品名统一为 `AlterSendmer`。内部 crate/进程名 `alter-sendme-gpui`、安装标识
+公开产品名统一为 `AlterSendmer`。内部 crate/进程名 `alter-sendmer`、安装标识
 `top.likanug.alter-sendme` 和旧 `AlterSendme` 配置目录只为升级兼容保留，不出现在新的产品
 名称、窗口标题或发行资产名称中。
 

@@ -26,7 +26,7 @@ if (-not $SkipBuild) {
     }
 }
 
-$executable = Join-Path $targetDirectory 'alter-sendme-gpui.exe'
+$executable = Join-Path $targetDirectory 'alter-sendmer.exe'
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "Build did not produce $executable"
 }

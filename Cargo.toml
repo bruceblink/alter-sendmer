@@ -1,5 +1,5 @@
 [package]
-name = "alter-sendme-gpui"
+name = "alter-sendmer"
 version = "0.7.3"
 edition = "2024"
 rust-version = "1.100"
@@ -53,7 +53,7 @@ resources = ["README.md", "PRIVACY.md"]
 before-packaging-command = "cargo build --locked --release"
 
 [[package.metadata.packager.binaries]]
-path = "alter-sendme-gpui"
+path = "alter-sendmer"
 main = true
 
 [package.metadata.packager.macos]
