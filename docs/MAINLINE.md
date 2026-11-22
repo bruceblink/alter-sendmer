@@ -184,6 +184,7 @@ CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Releas
 | `v0.6.0` | `0.10.0` | 会话生命周期、接收方上限、TM1 选择、跨进程兼容回归和 Windows 原生截图验收 |
 | `v0.7.0` | `0.11.0` | 诊断报告导出、票据与焦点修复、传输事件流校验、GPUI Kit 依赖迁移 |
 | `v0.7.1` | `0.11.0` | 修复 macOS 应用图标 |
+| `v0.7.3` | `0.11.0` | 六平台原生打包、macOS Intel、Windows ARM64、Linux ARM64、完整应用包签名和统一二进制名 |
 
 `v0.6.0` 只消费 sendmer 已发布能力，不引入账号、云存储、后台同步、
 内核级网络故障注入或跨设备永久续传。
@@ -223,6 +224,109 @@ UI Automation 校验选中状态；AccessKit 语义子项完成，但不代表�
 后台 daemon、跨设备同步、账号、云端文件托管和多租户控制面需要独立产品设计、认证、持久
 状态、冲突解决和运维方案。它们不进入 AlterSendmer 一次性传输主线，也不能由 GUI 私自扩展
 sendmer ticket 语义。
+
+### A10.4 参考 LocalSend 与 croc 的后续路线
+
+LocalSend 的官方协议使用局域网发现、设备指纹、HTTPS REST 接口、准备阶段会话和文件级 token。
+它支持文件、目录和文本，并提供桌面、移动、Web 和 headless 入口。croc 采用短口令 PAKE、
+直连与 relay fallback、代理、IPv6 优先、断点恢复和按块校验。两者的交互方式和协议边界不同，
+AlterSendmer 只借鉴可验证的产品能力，不把 LocalSend REST 混入 sendmer Core，也不复制 croc 的
+内部传输实现。[LocalSend 协议 v2.2](https://github.com/localsend/protocol/blob/main/README.md)
+。[croc README](https://github.com/schollz/croc/blob/main/README.md)。
+
+#### P0 桌面质量和代码结构
+
+已完成 `d553615` 的状态、持久化、输入、渲染和测试拆分，以及 `e46b9d9`、`87091d4` 的 Windows 选择器、
+系统目录打开和进度信息修复。后续只保留真实 Windows 窗口验收、路径异常处理和高 DPI 检查。
+
+- 保持 `app.rs` 只负责 `AlterSendmeApp` 状态机和 sendmer 事件生命周期。模型、持久化、输入、
+  渲染和测试分别放在独立模块。
+- 在 Windows 真实窗口验收文件选择、文件夹选择、接收目录打开、字节进度、速度和高 DPI。
+- 为路径不存在、权限不足、非 ASCII 路径、网络盘和被占用的目标目录显示稳定错误摘要。
+- 继续保留 macOS、Windows、Linux 的编译、格式和 Clippy 检查。发布工作流继续使用六个原生
+  执行器生成目标安装包。
+
+验收条件是三平台检查通过、Windows 真实窗口完成发送和接收闭环，并且拆分前后的 42 项测试全部
+通过。回退范围是恢复 `app.rs` 和对应的 `mod` 声明，不改变 sendmer 接口。
+
+#### P1 可恢复传输和文件一致性
+
+- 为每个文件建立稳定的 manifest，记录相对路径、大小、修改时间、完整 SHA-256 和 chunk 大小。
+- 为每个接收会话保存已确认的 chunk 范围或位图。重连后只请求缺失范围，重复请求必须幂等。
+- 完成后先验证每个文件和整个目录的摘要，再原子提交到目标路径。校验失败时保留可诊断的临时状态。
+- 显示恢复次数、已确认字节、剩余字节、速度、预计剩余时间和当前连接路径。
+- 继续使用 sendmer 的持久接收缓存，不让桌面端读取其私有缓存结构。补充断网、切换网络、
+  relay 降级和应用重启后的恢复测试。
+
+验收条件是 150 ms 往返延迟、抖动、限速、丢包和短时断网组合场景下能够续传，最终 SHA-256
+一致，恢复耗时可记录。重连测试参考 croc 的 bundle reconnect 测试和按块校验流程。
+[croc bundle reconnect test](https://github.com/schollz/croc/blob/main/src/croc/bundle_test.go)。
+
+#### P2 局域网发现和连接选择
+
+- 新增独立 `Discovery Adapter`，提供设备别名、设备类型、系统、端口、协议版本和指纹。
+- 首选受控的 UDP multicast 发现。multicast 不可用时，允许同网段 register fallback 和手工
+  地址输入。发现数据只用于候选连接，不能直接授予下载权限。
+- 增加网络切换后的重新发现、连接路径显示、IPv4/IPv6 回退和 relay 健康缓存。
+- 保留现有 ticket 连接入口，发现功能采用可选模式，便于 headless 和跨网 relay 使用。
+
+LocalSend 的协议使用 `224.0.0.167:53317`、HTTP register fallback、设备指纹和 `prepare-upload`
+会话。AlterSendmer 应重新定义适配层字段和认证边界，避免把未经认证的发现包当作信任记录。
+[LocalSend README](https://github.com/localsend/localsend/blob/main/README.md)。
+
+#### P3 安全和授权模型
+
+- 为设备增加长期公钥或证书指纹。首次连接显示确认信息，后续连接检测指纹变化。
+- 为 ticket 增加可选有效期、下载次数、撤销状态和会话范围。分享票据和一次下载会话分别认证。
+- 评估短 PIN 或二维码作为 PAKE 输入。密钥派生必须绑定会话、双方身份和协议版本。
+- 对发现消息、路径规范化、文件名渲染、超长消息、压缩炸弹和临时文件清理建立独立安全回归。
+- 日志继续排除 ticket、密钥、绝对路径和文件内容。relay 只记录必要的连接摘要和资源计数。
+
+LocalSend 的公开安全记录包含未经认证的 UDP 发现、路径遍历和文件名显示风险。AlterSendmer
+在启用发现和跨网连接前，必须完成威胁模型、协议字段审查和真实平台回归。
+[LocalSend Security Advisories](https://github.com/localsend/localsend/security)。
+
+#### P4 文件和用户体验
+
+- 支持多文件、混合目录、空目录策略、目录根保留和跨平台路径显示。
+- 增加目标冲突策略，包括覆盖、自动改名、跳过和逐项确认，并在完成摘要中列出结果。
+- 增加发送前摘要、文件数量、总大小、预估时间和校验状态。接收端显示保存路径和可用磁盘空间。
+- 支持 QR 展示和扫描、文本发送、剪贴板发送，以及复制 ticket 与设备信息的统一入口。
+- 为取消、暂停、恢复、失败重试和网络切换显示明确状态。按钮状态必须与真实会话状态一致。
+
+LocalSend 的 CLI 已覆盖文件、目录和混合输入。croc 还提供多文件、目录、文本、QR 和浏览器
+入口。AlterSendmer 先完成桌面闭环，再决定哪些入口进入移动端和 headless 客户端。
+
+#### P5 headless、移动端和生态接入
+
+- 提供 `alter-sendmer-cli`，复用同一 transfer adapter、ticket、manifest 和更新签名格式。
+- 增加无窗口发送/接收、标准输入输出、退出码、JSON 事件和脚本化路径冲突策略。
+- Android 和 iOS 作为独立适配项目，先复用协议与 sendmer 能力，再分别处理后台传输、文件权限、
+  分享菜单、二维码和系统通知。
+- Web 接收和异步云端存储暂不进入桌面主线。若未来增加，必须设计端到端加密、有效期、撤销、
+  下载次数、分块校验和服务端资源清理。
+
+#### P6 发布和运维
+
+- 继续用六个原生执行器生成 Windows x64/ARM64、Linux amd64/ARM64、macOS ARM64/Intel。
+- 发布前核对应用内部二进制名、安装器名、更新清单、minisign、Sigstore、SBOM、provenance
+  和 SHA-256 是否指向同一批文件。
+- 为 relay 增加首帧超时、握手期限、每源并发上限、消息大小限制、磁盘配额和临时文件回收。
+- 记录直连、relay、代理、IPv4/IPv6 和恢复耗时的匿名统计，支持问题定位，不记录内容和票据。
+
+## 9.5 版本安排与进入条件
+
+| 版本 | 重点 | 进入条件 |
+| --- | --- | --- |
+| `v0.8.x` | P0 重构收尾、P1 manifest、分块恢复、冲突策略和 Windows 实窗验收 | 跨平台构建通过，弱网恢复和最终摘要测试通过 |
+| `v0.9.x` | P2 局域网发现、手工地址、网络变化恢复和连接路径诊断 | 发现认证边界冻结，局域网和 relay 回退测试通过 |
+| `v0.10.x` | P3 设备指纹、短 PIN/二维码、ticket 有效期和撤销 | 威胁模型、安全回归和密钥迁移方案通过审查 |
+| `v0.11.x` | P4 多文件、冲突策略、文本和 QR 工作流 | Windows、macOS、Linux 真实窗口验收通过 |
+| `v1.0.x` | P5 CLI、移动端适配计划和发布稳定性 | 协议兼容矩阵、升级回滚和长期传输测试通过 |
+
+每个版本只进入一个主阶段。跨阶段功能必须先补接口约定、状态迁移、错误码、日志字段和回退
+边界，再进入实现。sendmer Core 的新能力仍按独立版本发布，AlterSendmer 在 crates.io 可解析
+后再升级依赖。
 
 ## 10. 质量门禁与发布顺序
 
