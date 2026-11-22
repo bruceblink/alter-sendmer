@@ -51,6 +51,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2.9.3
+      - name: Rust source size
+        run: python3 scripts/check-rust-size.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Check

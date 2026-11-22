@@ -45,211 +45,6 @@ pub(crate) fn progress_fraction(progress: &Progress) -> f32 {
     (progress.percentage() / 100.0).clamp(0.0, 1.0)
 }
 
-pub(crate) fn ticket_card(
-    ticket: &str,
-    colors: Palette,
-    copy_label: &'static str,
-    ticket_hint: String,
-    cx: &mut Context<AlterSendmeApp>,
-    action: impl Fn(&mut AlterSendmeApp, &mut Context<AlterSendmeApp>) + 'static,
-) -> gpui_kit::Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .p_3()
-        .rounded_md()
-        .bg(colors.panel_alt)
-        .child(div().text_xs().text_color(colors.muted).child(ticket_hint))
-        .child(
-            div()
-                .text_xs()
-                .text_color(colors.text)
-                .truncate()
-                .child(ticket.to_owned()),
-        )
-        .child(
-            div()
-                .id("copy-ticket-secondary")
-                .focusable()
-                .tab_stop(true)
-                .role(A11yRole::Button)
-                .aria_label(copy_label)
-                .h(px(32.0))
-                .px_3()
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded_md()
-                .border_1()
-                .border_color(colors.border)
-                .text_sm()
-                .cursor_pointer()
-                .on_click(cx.listener(move |app, _, _, cx| action(app, cx)))
-                .child(copy_label),
-        )
-}
-
-pub(crate) fn completion_card(
-    app: &AlterSendmeApp,
-    colors: Palette,
-    cx: &mut Context<AlterSendmeApp>,
-) -> gpui_kit::Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .p_4()
-        .rounded_md()
-        .bg(colors.panel_alt)
-        .child(
-            div()
-                .text_lg()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(colors.accent)
-                .child(if app.is_send_stopped() {
-                    app.text("transfer.stopped")
-                } else {
-                    app.text("transfer.complete")
-                }),
-        )
-        .child(
-            div().text_sm().child(
-                app.completed_name
-                    .clone()
-                    .unwrap_or_else(|| app.text("transfer.file")),
-            ),
-        )
-        .child(
-            div()
-                .text_sm()
-                .text_color(colors.muted)
-                .child(if app.is_send_stopped() {
-                    app.text("transfer.wasStopped")
-                } else {
-                    format!(
-                        "{} bytes - {:.1}s",
-                        app.completed_size,
-                        app.completed_duration.as_secs_f32()
-                    )
-                }),
-        )
-        .child(app.button(
-            "receive-reveal",
-            app.text("open_folder"),
-            app.completed_path.is_some(),
-            colors,
-            cx,
-            |app, cx| app.reveal_completed_path(cx),
-        ))
-        .child(app.button(
-            "receive-done",
-            if app.receive_phase == TransferPhase::Completed {
-                app.copy("new").to_owned()
-            } else {
-                app.text("transfer.done")
-            },
-            true,
-            colors,
-            cx,
-            |app, cx| app.done_transfer(cx),
-        ))
-}
-
-pub(crate) fn history_panel(
-    app: &mut AlterSendmeApp,
-    colors: Palette,
-    cx: &mut Context<AlterSendmeApp>,
-) -> gpui_kit::Div {
-    let rows = app.history.iter().enumerate().fold(
-        div().flex().flex_col().gap_2(),
-        |panel, (index, entry)| {
-            // 历史记录仅能复制当前会话仍在使用的票据。
-            let ticket = entry
-                .ticket
-                .as_ref()
-                .filter(|ticket| app.send_result.is_some() && app.ticket.as_ref() == Some(*ticket))
-                .cloned();
-            let path = entry.path.clone();
-            let mut summary = format!(
-                "{} | {} | {} bytes | {} ms | {}",
-                entry.role, entry.outcome, entry.size, entry.duration_ms, entry.date
-            );
-            if let Some(session_id) = entry.session_id.as_deref() {
-                let short_id = session_id.get(..8).unwrap_or(session_id);
-                summary.push_str(&format!(" | session {short_id}"));
-            }
-            if let Some(error_code) = entry.error_code.as_deref() {
-                let error_phase = entry.error_phase.as_deref().unwrap_or("unknown");
-                summary.push_str(&format!(" | {error_code}@{error_phase}"));
-            }
-            panel.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_xs()
-                            .text_color(colors.muted)
-                            .truncate()
-                            .child(format!("{path} - {summary}")),
-                    )
-                    .when_some(ticket, |view, ticket| {
-                        view.child(app.button(
-                            ("history-copy", index),
-                            app.copy("copy"),
-                            true,
-                            colors,
-                            cx,
-                            move |app, cx| app.copy_history_ticket(ticket.clone(), cx),
-                        ))
-                    }),
-            )
-        },
-    );
-    div()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .p_4()
-        .rounded_md()
-        .border_1()
-        .border_color(colors.border)
-        .bg(colors.panel_alt)
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(app.text("history.title")),
-                )
-                .child(app.button(
-                    "history-clear",
-                    app.text("history.clear"),
-                    !app.history.is_empty(),
-                    colors,
-                    cx,
-                    |app, cx| app.clear_history(cx),
-                )),
-        )
-        .when(app.history.is_empty(), |panel| {
-            panel.child(
-                div()
-                    .text_sm()
-                    .text_color(colors.muted)
-                    .child(app.text("history.empty")),
-            )
-        })
-        .when(!app.history.is_empty(), |panel| panel.child(rows))
-}
-
 pub(crate) fn preferences_panel(
     app: &mut AlterSendmeApp,
     colors: Palette,
@@ -372,8 +167,6 @@ pub(crate) fn upload_rate_control(
     } else {
         app.upload_rate_input.clone()
     };
-    let entity = cx.entity();
-    let focus = app.upload_rate_focus.clone();
 
     div()
         .id("upload-rate-control")
@@ -401,86 +194,16 @@ pub(crate) fn upload_rate_control(
                 .flex()
                 .items_center()
                 .gap_1()
-                .child(
-                    div()
-                        .id("upload-rate-unlimited")
-                        .focusable()
-                        .tab_stop(true)
-                        .role(A11yRole::Button)
-                        .aria_label(format!("{label}: {unlimited_label}"))
-                        .h_full()
-                        .min_w(px(96.0))
-                        .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(if unlimited {
-                            colors.accent
-                        } else {
-                            colors.border
-                        })
-                        .bg(if unlimited {
-                            colors.accent.alpha(0.14)
-                        } else {
-                            colors.background
-                        })
-                        .text_color(if unlimited {
-                            colors.accent
-                        } else {
-                            colors.muted
-                        })
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_pointer()
-                        .on_click(cx.listener(|app, _, _, cx| app.clear_upload_rate(cx)))
-                        .child(unlimited_label),
-                )
-                .child(
-                    div()
-                        .id("upload-rate-input")
-                        .track_focus(&focus)
-                        .tab_stop(true)
-                        .focus_visible(|style| style.border_color(colors.accent))
-                        .role(A11yRole::TextInput)
-                        .aria_label(format!("{label} MiB/s"))
-                        .relative()
-                        .h_full()
-                        .w(px(68.0))
-                        .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(if unlimited {
-                            colors.border
-                        } else {
-                            colors.accent
-                        })
-                        .bg(colors.background)
-                        .text_color(if unlimited { colors.muted } else { colors.text })
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_pointer()
-                        .on_click(
-                            cx.listener(move |app, _, window, cx| {
-                                app.focus_upload_rate(window, cx)
-                            }),
-                        )
-                        .child(gpui_kit::canvas(
-                            move |bounds, _, _| bounds,
-                            move |bounds, _, window, cx| {
-                                window.handle_input(
-                                    &focus,
-                                    ElementInputHandler::new(bounds, entity.clone()),
-                                    cx,
-                                );
-                            },
-                        ))
-                        .child(rate_value),
-                )
+                .child(upload_rate_unlimited_button(
+                    unlimited,
+                    label.clone(),
+                    unlimited_label,
+                    colors,
+                    cx,
+                ))
+                .child(upload_rate_input(
+                    app, unlimited, label, rate_value, colors, cx,
+                ))
                 .child(
                     div()
                         .w(px(42.0))
@@ -489,6 +212,95 @@ pub(crate) fn upload_rate_control(
                         .child("MiB/s"),
                 ),
         )
+}
+
+fn upload_rate_unlimited_button(
+    unlimited: bool,
+    label: String,
+    unlimited_label: String,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div()
+        .id("upload-rate-unlimited")
+        .focusable()
+        .tab_stop(true)
+        .role(A11yRole::Button)
+        .aria_label(format!("{label}: {unlimited_label}"))
+        .h_full()
+        .min_w(px(96.0))
+        .px_2()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .border_1()
+        .border_color(if unlimited {
+            colors.accent
+        } else {
+            colors.border
+        })
+        .bg(if unlimited {
+            colors.accent.alpha(0.14)
+        } else {
+            colors.background
+        })
+        .text_color(if unlimited {
+            colors.accent
+        } else {
+            colors.muted
+        })
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .cursor_pointer()
+        .on_click(cx.listener(|app, _, _, cx| app.clear_upload_rate(cx)))
+        .child(unlimited_label)
+}
+
+fn upload_rate_input(
+    app: &mut AlterSendmeApp,
+    unlimited: bool,
+    label: String,
+    rate_value: String,
+    colors: Palette,
+    cx: &mut Context<AlterSendmeApp>,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let entity = cx.entity();
+    let focus = app.upload_rate_focus.clone();
+    div()
+        .id("upload-rate-input")
+        .track_focus(&focus)
+        .tab_stop(true)
+        .focus_visible(|style| style.border_color(colors.accent))
+        .role(A11yRole::TextInput)
+        .aria_label(format!("{label} MiB/s"))
+        .relative()
+        .h_full()
+        .w(px(68.0))
+        .px_2()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .border_1()
+        .border_color(if unlimited {
+            colors.border
+        } else {
+            colors.accent
+        })
+        .bg(colors.background)
+        .text_color(if unlimited { colors.muted } else { colors.text })
+        .text_sm()
+        .font_weight(FontWeight::SEMIBOLD)
+        .cursor_pointer()
+        .on_click(cx.listener(move |app, _, window, cx| app.focus_upload_rate(window, cx)))
+        .child(gpui_kit::canvas(
+            move |bounds, _, _| bounds,
+            move |bounds, _, window, cx| {
+                window.handle_input(&focus, ElementInputHandler::new(bounds, entity.clone()), cx);
+            },
+        ))
+        .child(rate_value)
 }
 
 pub(crate) fn locale_menu(
