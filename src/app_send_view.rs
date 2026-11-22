@@ -464,6 +464,12 @@ fn send_sharing(
                 .child(progress.transfer_stats_label()),
         )
         .child(
+            div()
+                .text_xs()
+                .text_color(colors.muted)
+                .child(app.recovery.label()),
+        )
+        .child(
             div().text_xs().text_color(colors.muted).child(
                 progress
                     .current_name

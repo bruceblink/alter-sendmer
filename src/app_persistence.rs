@@ -1,6 +1,7 @@
 //! AlterSendmer 的本地路径、偏好、历史和缓存持久化。
 
 use super::app_model::*;
+use super::recovery::RecoverySnapshot;
 use crate::locale::Locale;
 use std::{fs, path::PathBuf};
 
@@ -105,6 +106,23 @@ pub(crate) fn receive_cache_path() -> PathBuf {
                 .join("AlterSendme")
                 .join("receive-cache")
         })
+}
+
+pub(crate) fn recovery_path() -> PathBuf {
+    directories::ProjectDirs::from("com", "AlterSendme", "AlterSendme")
+        .map(|dirs| dirs.data_dir().join("recovery.json"))
+        .unwrap_or_else(|| PathBuf::from("alter-sendme-recovery.json"))
+}
+
+/// 保存当前恢复状态，错误不会覆盖传输本身的结果。
+pub(crate) fn persist_recovery(snapshot: &RecoverySnapshot) {
+    let path = recovery_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(contents) = serde_json::to_string_pretty(snapshot) {
+        let _ = fs::write(path, contents);
+    }
 }
 
 pub(crate) fn default_preferences() -> Preferences {

@@ -262,6 +262,10 @@ AlterSendmer 只借鉴可验证的产品能力，不把 LocalSend REST 混入 se
 一致，恢复耗时可记录。重连测试参考 croc 的 bundle reconnect 测试和按块校验流程。
 [croc bundle reconnect test](https://github.com/schollz/croc/blob/main/src/croc/bundle_test.go)。
 
+当前实现切片已增加 `recovery.json`、manifest 摘要、chunk size/count、已验证字节、恢复次数和
+恢复状态展示。核心分块校验与缺失范围恢复继续由 sendmer 0.11.0 负责。弱网脚本和运行字段见
+`scripts/weaknet-baseline.sh` 与 `docs/weak-network-acceptance.md`。
+
 #### P2 局域网发现和连接选择
 
 - 新增独立 `Discovery Adapter`，提供设备别名、设备类型、系统、端口、协议版本和指纹。

@@ -123,7 +123,7 @@ impl AlterSendmeApp {
         let role = event.role;
         self.apply_core_phase(role, event.phase);
         match event.event {
-            TransferEventData::Started => self.apply_started(role),
+            TransferEventData::Started => self.apply_started(role, event.session_id.as_str()),
             TransferEventData::Progress {
                 processed,
                 total,
@@ -134,10 +134,24 @@ impl AlterSendmeApp {
             TransferEventData::Failed { error } => self.apply_failed(role, error),
             TransferEventData::Cancelled => self.apply_cancelled(role),
         }
+        persist_recovery(&self.recovery);
         cx.notify();
     }
 
-    fn apply_started(&mut self, role: Role) {
+    fn apply_started(&mut self, role: Role, session_id: &str) {
+        let manifest = if role == Role::Sender {
+            self.manifest_summary.clone()
+        } else {
+            None
+        };
+        self.recovery.begin(
+            match role {
+                Role::Sender => "sender",
+                Role::Receiver => "receiver",
+            },
+            session_id.to_owned(),
+            manifest,
+        );
         self.transfer_started_at = Some(Instant::now());
         self.status = match role {
             Role::Sender => self.status_text("preparing", "Preparing for transport"),
@@ -190,6 +204,7 @@ impl AlterSendmeApp {
                 self.status = self.status_text("downloading", "Downloading in progress");
             }
         }
+        self.recovery.update_progress(processed, total, speed);
     }
 
     fn apply_file_names(&mut self, role: Role, file_names: Vec<String>) {
@@ -202,6 +217,7 @@ impl AlterSendmeApp {
     }
 
     fn apply_completed(&mut self, role: Role) {
+        self.recovery.complete();
         match role {
             Role::Sender => {
                 let recorded = self.sender_status == SenderTransferStatus::Completed;
@@ -250,6 +266,7 @@ impl AlterSendmeApp {
         state.error_phase = Some(error_phase);
         state.retryable = Some(error.retryable);
         self.error = Some(message);
+        self.recovery.fail(error.message.clone());
 
         match role {
             Role::Sender => self.apply_sender_failure(error, sender_expired),
@@ -284,6 +301,7 @@ impl AlterSendmeApp {
     }
 
     fn apply_cancelled(&mut self, role: Role) {
+        self.recovery.cancel();
         self.completed_stopped = true;
         self.capture_transfer_duration(role);
         self.transfer_started_at = None;

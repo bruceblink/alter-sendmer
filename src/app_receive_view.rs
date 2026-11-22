@@ -229,6 +229,12 @@ fn receive_active_panel(
             div()
                 .text_xs()
                 .text_color(colors.muted)
+                .child(app.recovery.label()),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(colors.muted)
                 .child(progress.current_name.clone().unwrap_or(receive_name)),
         )
         .child(

@@ -74,6 +74,10 @@ entries. Cleanup removes only expired, inactive entries with a recognized cache 
 active, unknown, and unexpired data. This recovery path does not promise permanent cross-device
 resume and is not evidence of kernel-level packet-loss or latency fault injection.
 
+The weak-network acceptance runbook is [docs/weak-network-acceptance.md](docs/weak-network-acceptance.md).
+It uses sendmer's cache and retry behavior, records recovery state and final SHA-256, and applies
+Linux `tc netem` profiles on a dedicated test interface.
+
 ## Packaging
 
 ```powershell

@@ -24,6 +24,9 @@ use std::{
 #[path = "app_model.rs"]
 mod app_model;
 use app_model::*;
+#[path = "recovery.rs"]
+mod recovery;
+use recovery::{ManifestSummary, RecoverySnapshot};
 #[path = "app_actions.rs"]
 mod app_actions;
 #[path = "app_diagnostics.rs"]
@@ -106,6 +109,8 @@ pub struct AlterSendmeApp {
     sender_event_state: EventSessionState,
     receiver_event_state: EventSessionState,
     sender_status: SenderTransferStatus,
+    manifest_summary: Option<ManifestSummary>,
+    recovery: RecoverySnapshot,
 }
 
 impl AlterSendmeApp {
@@ -174,6 +179,8 @@ impl AlterSendmeApp {
             sender_event_state: EventSessionState::default(),
             receiver_event_state: EventSessionState::default(),
             sender_status: SenderTransferStatus::Idle,
+            manifest_summary: None,
+            recovery: RecoverySnapshot::default(),
         };
         let entity = cx.entity().downgrade();
         cx.spawn(

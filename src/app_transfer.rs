@@ -12,6 +12,10 @@ impl AlterSendmeApp {
         if self.send_phase != TransferPhase::Idle {
             return;
         }
+        self.manifest_summary = Some(ManifestSummary::from_path(
+            &path,
+            self.preferences.manifest_mode,
+        ));
         self.generation += 1;
         let generation = self.generation;
         self.reset_event_state(Role::Sender);
@@ -258,6 +262,8 @@ impl AlterSendmeApp {
     }
 
     pub(crate) fn retry_receive(&mut self, cx: &mut Context<Self>) {
+        self.recovery.mark_retry();
+        persist_recovery(&self.recovery);
         self.receive_phase = TransferPhase::Idle;
         self.completed_stopped = false;
         self.error = None;
@@ -532,6 +538,8 @@ impl AlterSendmeApp {
         self.receive_phase = TransferPhase::Idle;
         self.send_progress = Progress::default();
         self.receive_progress = Progress::default();
+        self.manifest_summary = None;
+        self.recovery = RecoverySnapshot::default();
         self.receive_files.clear();
         self.selected_path = None;
         self.ticket = None;

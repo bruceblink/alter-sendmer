@@ -12,6 +12,7 @@ use sendmer::{
     RelayModeOption, Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferEvent,
     TransferEventData,
 };
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -168,6 +169,7 @@ fn adapter_transfers_a_file_and_forwards_transfer_events() {
     let output_dir = tempdir().expect("create output directory");
     let source_file = source_dir.path().join("adapter-e2e.txt");
     let contents = b"GPUI transfer adapter end-to-end verification";
+    let expected_hash = sha256_bytes(contents);
     fs::write(&source_file, contents).expect("write source fixture");
 
     let ticket_path = output_dir.path().join("ticket.txt");
@@ -208,6 +210,11 @@ fn adapter_transfers_a_file_and_forwards_transfer_events() {
         );
         let received = target.join("adapter-e2e.txt");
         assert_eq!(fs::read(received).expect("read received file"), contents);
+        assert_eq!(
+            sha256_file(&target.join("adapter-e2e.txt")),
+            expected_hash,
+            "receive output hash must match the source hash"
+        );
 
         if name == "first" {
             let deadline = Instant::now() + Duration::from_secs(20);
@@ -458,4 +465,14 @@ fn temp_staging_dirs(prefix: &str) -> Vec<std::path::PathBuf> {
         .collect::<Vec<_>>();
     paths.sort();
     paths
+}
+
+fn sha256_bytes(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn sha256_file(path: &std::path::Path) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(fs::read(path).expect("read file for hash"));
+    format!("{:x}", hasher.finalize())
 }
