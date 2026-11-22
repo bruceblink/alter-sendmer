@@ -3,7 +3,11 @@
 use super::app_model::*;
 use super::recovery::RecoverySnapshot;
 use crate::locale::Locale;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 pub(crate) fn path_size(path: &PathBuf) -> u64 {
     if path.is_file() {
@@ -114,14 +118,56 @@ pub(crate) fn recovery_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("alter-sendme-recovery.json"))
 }
 
-/// 保存当前恢复状态，错误不会覆盖传输本身的结果。
-pub(crate) fn persist_recovery(snapshot: &RecoverySnapshot) {
+/// 以同目录临时文件加替换写入恢复状态，避免进程中断留下半份 JSON。
+pub(crate) fn persist_recovery(snapshot: &RecoverySnapshot) -> io::Result<()> {
     let path = recovery_path();
     if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
+        fs::create_dir_all(parent)?;
     }
-    if let Ok(contents) = serde_json::to_string_pretty(snapshot) {
-        let _ = fs::write(path, contents);
+    let contents = serde_json::to_vec_pretty(snapshot)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let temporary = path.with_file_name(format!(
+        ".{}.{}.tmp",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("recovery"),
+        std::process::id()
+    ));
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&temporary)?;
+    file.write_all(&contents)?;
+    file.sync_all()?;
+    replace_file(&temporary, &path)
+}
+
+/// 在启动时读取并校验恢复状态。损坏、过期或不属于当前格式的文件会被忽略。
+pub(crate) fn load_recovery() -> Option<RecoverySnapshot> {
+    let contents = fs::read_to_string(recovery_path()).ok()?;
+    let mut snapshot = serde_json::from_str::<RecoverySnapshot>(&contents).ok()?;
+    snapshot.normalize_loaded().then_some(snapshot)
+}
+
+/// 删除新会话不再需要的恢复快照，保留其它缓存和历史记录。
+pub(crate) fn clear_recovery() -> io::Result<()> {
+    match fs::remove_file(recovery_path()) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn replace_file(temporary: &Path, destination: &Path) -> io::Result<()> {
+    match fs::rename(temporary, destination) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            // Windows 不允许 rename 覆盖现有文件，先移除旧文件再完成同目录替换。
+            fs::remove_file(destination)?;
+            fs::rename(temporary, destination)
+        }
+        Err(error) => Err(error),
     }
 }
 
@@ -211,10 +257,18 @@ pub(crate) fn persist_theme(theme: Theme) {
 }
 
 pub(crate) fn load_history() -> Vec<HistoryEntry> {
-    fs::read_to_string(history_path())
+    let mut entries: Vec<HistoryEntry> = fs::read_to_string(history_path())
         .ok()
         .and_then(|contents| serde_json::from_str(&contents).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let original = entries.clone();
+    for entry in &mut entries {
+        sanitize_history_entry(entry);
+    }
+    if entries != original {
+        persist_history(&entries);
+    }
+    entries
 }
 
 pub(crate) fn persist_history(entries: &[HistoryEntry]) {
@@ -222,9 +276,28 @@ pub(crate) fn persist_history(entries: &[HistoryEntry]) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    if let Ok(contents) = serde_json::to_string_pretty(entries) {
+    let mut safe_entries = entries.to_vec();
+    for entry in &mut safe_entries {
+        sanitize_history_entry(entry);
+    }
+    if let Ok(contents) = serde_json::to_string_pretty(&safe_entries) {
         let _ = fs::write(path, contents);
     }
+}
+
+/// 只保留历史记录需要的显示名称，并清除旧版本保存的 bearer ticket。
+pub(crate) fn sanitize_history_entry(entry: &mut HistoryEntry) {
+    entry.path = history_display_name(&entry.path);
+    entry.ticket = None;
+}
+
+/// 从本地路径或旧版本路径字符串中提取不含目录的显示名称。
+pub(crate) fn history_display_name(path: &str) -> String {
+    path.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 pub(crate) fn unix_timestamp() -> u64 {
@@ -252,4 +325,25 @@ pub(crate) fn ticket_replacement_fits_limit(
         return false;
     };
     result_len <= MAX_TICKET_LEN
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replace_file;
+    use std::fs;
+
+    #[test]
+    fn recovery_replace_file_leaves_complete_json() {
+        let directory = tempfile::tempdir().expect("create persistence fixture");
+        let destination = directory.path().join("recovery.json");
+        let temporary = directory.path().join(".recovery.json.tmp");
+        fs::write(&destination, b"old").expect("write old snapshot");
+        fs::write(&temporary, b"{\"state\":\"completed\"}").expect("write temporary snapshot");
+        replace_file(&temporary, &destination).expect("replace snapshot");
+        assert_eq!(
+            fs::read_to_string(destination).expect("read snapshot"),
+            "{\"state\":\"completed\"}"
+        );
+        assert!(!temporary.exists());
+    }
 }

@@ -128,6 +128,7 @@ impl AlterSendmeApp {
             .max_upload_rate_mib_per_sec
             .map(|rate| rate.to_string())
             .unwrap_or_default();
+        let recovery = load_recovery().unwrap_or_default();
         window.focus(&root_focus, cx);
         let app = Self {
             tab: Tab::Send,
@@ -180,7 +181,7 @@ impl AlterSendmeApp {
             receiver_event_state: EventSessionState::default(),
             sender_status: SenderTransferStatus::Idle,
             manifest_summary: None,
-            recovery: RecoverySnapshot::default(),
+            recovery,
         };
         let entity = cx.entity().downgrade();
         cx.spawn(

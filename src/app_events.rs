@@ -72,8 +72,7 @@ impl AlterSendmeApp {
         format!("{summary}: {}{retry_hint}", error.message)
     }
 
-    /// Records one finished or failed transfer while avoiding ticket/file contents beyond the
-    /// sender ticket that is needed for history replay.
+    /// 记录一次传输结果，只保存文件名和诊断字段，不保存完整路径或 bearer ticket。
     pub(crate) fn record_history(
         &mut self,
         role: &str,
@@ -97,18 +96,15 @@ impl AlterSendmeApp {
         self.history.push(HistoryEntry {
             role: role.to_owned(),
             path: path
-                .map(|value| value.display().to_string())
+                .and_then(|value| value.file_name())
+                .map(|value| value.to_string_lossy().to_string())
                 .unwrap_or_default(),
             size,
             duration_ms: duration.as_millis(),
             speed,
             date: unix_timestamp().to_string(),
             outcome: outcome.to_owned(),
-            ticket: if role == "sender" {
-                self.ticket.clone()
-            } else {
-                None
-            },
+            ticket: None,
             session_id: event_state.session_id,
             error_code: event_state.error_code,
             error_phase: event_state.error_phase,
@@ -121,6 +117,18 @@ impl AlterSendmeApp {
             return;
         }
         let role = event.role;
+        let role_name = match role {
+            Role::Sender => "sender",
+            Role::Receiver => "receiver",
+        };
+        if !matches!(&event.event, TransferEventData::Started)
+            && !self
+                .recovery
+                .matches_session(role_name, event.session_id.as_str())
+        {
+            tracing::debug!(role = role_name, "ignoring event outside recovery session");
+            return;
+        }
         self.apply_core_phase(role, event.phase);
         match event.event {
             TransferEventData::Started => self.apply_started(role, event.session_id.as_str()),
@@ -134,7 +142,12 @@ impl AlterSendmeApp {
             TransferEventData::Failed { error } => self.apply_failed(role, error),
             TransferEventData::Cancelled => self.apply_cancelled(role),
         }
-        persist_recovery(&self.recovery);
+        if self.recovery.should_persist() {
+            match persist_recovery(&self.recovery) {
+                Ok(()) => self.recovery.mark_persisted(),
+                Err(error) => tracing::warn!(error = %error, "failed to persist recovery snapshot"),
+            }
+        }
         cx.notify();
     }
 
@@ -209,6 +222,8 @@ impl AlterSendmeApp {
 
     fn apply_file_names(&mut self, role: Role, file_names: Vec<String>) {
         if role == Role::Receiver {
+            self.recovery.manifest =
+                Some(ManifestSummary::from_received_file_names(file_names.len()));
             self.receive_progress.total_files = file_names.len().max(1) as u32;
             self.receive_files = file_names;
             self.receive_progress.current_name = self.receive_files.first().cloned();
@@ -260,13 +275,14 @@ impl AlterSendmeApp {
         let message = self.structured_error_message(&error);
         let error_code = transfer_error_code_name(error.code).to_owned();
         let error_phase = transfer_phase_name(error.phase).to_owned();
+        let recovery_error = format!("{error_code}@{error_phase}");
         self.capture_transfer_duration(role);
         let state = self.event_state_mut(role);
         state.error_code = Some(error_code);
         state.error_phase = Some(error_phase);
         state.retryable = Some(error.retryable);
         self.error = Some(message);
-        self.recovery.fail(error.message.clone());
+        self.recovery.fail(recovery_error);
 
         match role {
             Role::Sender => self.apply_sender_failure(error, sender_expired),

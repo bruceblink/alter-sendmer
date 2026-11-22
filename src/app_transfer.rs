@@ -258,12 +258,21 @@ impl AlterSendmeApp {
         self.error = None;
         self.ticket = None;
         self.send_progress = Progress::default();
+        // 发送重试创建新的会话，不继承上一会话的恢复计数。
+        self.recovery = RecoverySnapshot::default();
+        if let Err(error) = clear_recovery() {
+            tracing::warn!(error = %error, "failed to clear recovery snapshot before send retry");
+        }
         self.start_sharing(cx);
     }
 
     pub(crate) fn retry_receive(&mut self, cx: &mut Context<Self>) {
         self.recovery.mark_retry();
-        persist_recovery(&self.recovery);
+        if let Err(error) = persist_recovery(&self.recovery) {
+            tracing::warn!(error = %error, "failed to persist receive retry state");
+        } else {
+            self.recovery.mark_persisted();
+        }
         self.receive_phase = TransferPhase::Idle;
         self.completed_stopped = false;
         self.error = None;
@@ -557,6 +566,9 @@ impl AlterSendmeApp {
         self.locale_menu_open = false;
         self.diagnostics = None;
         self.error = None;
+        if let Err(error) = clear_recovery() {
+            tracing::warn!(error = %error, "failed to clear recovery snapshot for new transfer");
+        }
         self.sender_event_state = EventSessionState::default();
         self.receiver_event_state = EventSessionState::default();
         self.sender_status = SenderTransferStatus::Idle;

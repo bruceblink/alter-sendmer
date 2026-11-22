@@ -320,6 +320,8 @@ pub(crate) struct HistoryEntry {
     pub(crate) speed: u64,
     pub(crate) date: String,
     pub(crate) outcome: String,
+    /// 旧历史 JSON 仍可读取此字段，但新记录不再保存 bearer ticket。
+    #[serde(default, skip_serializing)]
     pub(crate) ticket: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) session_id: Option<String>,

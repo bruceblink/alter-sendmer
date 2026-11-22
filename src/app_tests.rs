@@ -4,6 +4,7 @@ use super::*;
 
 #[cfg(test)]
 mod history_tests {
+    use super::app_persistence::{history_display_name, sanitize_history_entry};
     use super::{
         DiagnosticSummary, DiagnosticTransferState, EventSessionState, HistoryEntry,
         MAX_TICKET_LEN, Progress, TransferPhase, diagnostic_phase_name,
@@ -54,16 +55,16 @@ mod history_tests {
     }
 
     #[test]
-    fn history_entries_preserve_sender_ticket_and_outcome() {
+    fn history_entries_serialize_without_ticket() {
         let entry = HistoryEntry {
             role: "sender".into(),
-            path: "C:/share/a.txt".into(),
+            path: "a.txt".into(),
             size: 5,
             duration_ms: 10,
             speed: 500,
             date: "1".into(),
             outcome: "completed".into(),
-            ticket: Some("ticket".into()),
+            ticket: None,
             session_id: Some("0123456789abcdef0123456789abcdef".into()),
             error_code: None,
             error_phase: None,
@@ -71,6 +72,27 @@ mod history_tests {
         let encoded = serde_json::to_string(&entry).expect("history serializes");
         let decoded: HistoryEntry = serde_json::from_str(&encoded).expect("history parses");
         assert_eq!(decoded, entry);
+        assert!(!encoded.contains("ticket"));
+    }
+
+    #[test]
+    fn history_serializer_drops_legacy_ticket_even_without_migration() {
+        let entry = HistoryEntry {
+            role: "sender".into(),
+            path: "a.txt".into(),
+            size: 1,
+            duration_ms: 1,
+            speed: 1,
+            date: "1".into(),
+            outcome: "completed".into(),
+            ticket: Some("secret-bearer-ticket".into()),
+            session_id: None,
+            error_code: None,
+            error_phase: None,
+        };
+        let encoded = serde_json::to_string(&entry).expect("history serializes");
+        assert!(!encoded.contains("secret-bearer-ticket"));
+        assert!(!encoded.contains("ticket"));
     }
 
     #[test]
@@ -82,6 +104,33 @@ mod history_tests {
         assert_eq!(decoded.session_id, None);
         assert_eq!(decoded.error_code, None);
         assert_eq!(decoded.error_phase, None);
+    }
+
+    #[test]
+    fn legacy_history_migration_removes_ticket_and_absolute_path() {
+        let mut entry: HistoryEntry = serde_json::from_str(
+            r#"{"role":"sender","path":"C:\\Users\\Bruce\\share.txt","size":1,"duration_ms":2,"speed":3,"date":"4","outcome":"completed","ticket":"secret-bearer-ticket"}"#,
+        )
+        .expect("legacy history parses");
+        sanitize_history_entry(&mut entry);
+        assert_eq!(entry.path, "share.txt");
+        assert_eq!(entry.ticket, None);
+        let encoded = serde_json::to_string(&entry).expect("migrated history serializes");
+        assert!(!encoded.contains("secret-bearer-ticket"));
+        assert!(!encoded.contains("C:\\\\Users"));
+    }
+
+    #[test]
+    fn history_display_name_handles_posix_windows_and_directory_paths() {
+        assert_eq!(
+            history_display_name("/tmp/sendmer/report.bin"),
+            "report.bin"
+        );
+        assert_eq!(
+            history_display_name("C:\\tmp\\sendmer\\report.bin"),
+            "report.bin"
+        );
+        assert_eq!(history_display_name("/tmp/sendmer/"), "sendmer");
     }
 
     #[test]
