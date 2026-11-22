@@ -79,7 +79,7 @@ fn worker_sender() {
         let marker = PathBuf::from(&ticket_path).with_extension("completed");
         runtime.spawn(async move {
             tokio::time::timeout(
-                Duration::from_secs(20),
+                test_timeout(),
                 status.wait_for(|status| *status == SenderTransferStatus::Completed),
             )
             .await
@@ -168,9 +168,9 @@ fn adapter_transfers_a_file_and_forwards_transfer_events() {
     let source_dir = tempdir().expect("create source directory");
     let output_dir = tempdir().expect("create output directory");
     let source_file = source_dir.path().join("adapter-e2e.txt");
-    let contents = b"GPUI transfer adapter end-to-end verification";
-    let expected_hash = sha256_bytes(contents);
-    fs::write(&source_file, contents).expect("write source fixture");
+    let contents = fixture_contents();
+    let expected_hash = sha256_bytes(&contents);
+    fs::write(&source_file, &contents).expect("write source fixture");
 
     let ticket_path = output_dir.path().join("ticket.txt");
     let test_binary = std::env::current_exe().expect("locate test binary");
@@ -217,7 +217,7 @@ fn adapter_transfers_a_file_and_forwards_transfer_events() {
         );
 
         if name == "first" {
-            let deadline = Instant::now() + Duration::from_secs(20);
+            let deadline = Instant::now() + test_timeout();
             while !ticket_path.with_extension("completed").exists() {
                 assert!(
                     Instant::now() < deadline,
@@ -475,4 +475,22 @@ fn sha256_file(path: &std::path::Path) -> String {
     let mut hasher = Sha256::new();
     hasher.update(fs::read(path).expect("read file for hash"));
     format!("{:x}", hasher.finalize())
+}
+
+fn fixture_contents() -> Vec<u8> {
+    let size = std::env::var("ALTER_SENDMER_TEST_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(45);
+    (0..size)
+        .map(|index| (index as u8).wrapping_mul(31))
+        .collect()
+}
+
+fn test_timeout() -> Duration {
+    std::env::var("ALTER_SENDMER_TEST_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(20))
 }
