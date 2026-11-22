@@ -9,7 +9,7 @@
       "CAP_NET_ADMIN",
       "CAP_NET_RAW"
     ],
-    "fixture_bytes": 8388608
+    "fixture_sizes_bytes": [33554432, 8388608]
   },
   "results": [
     {
