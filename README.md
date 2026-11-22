@@ -89,7 +89,8 @@ until the build is signed with Developer ID and notarized.
 Release package filenames use `AlterSendmer-<version>-<platform>-<arch>`, for example
 `AlterSendmer-0.7.2-macos-arm64.dmg`. Release tags build and sign all three operating-system packages,
 generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore bundles, and a GitHub provenance
-attestation, then publish the complete asset groups. The minisign private key is stored only in
+attestation, then publish the complete asset groups. The release workflow builds target packages
+only for a pushed `v*` release tag. The minisign private key is stored only in
 GitHub Actions secrets.
 
 ## Documentation
