@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-22",
+  "environment": {
+    "container": "alter-sendmer-netem",
+    "image": "alpine:3.20",
+    "iproute2": "6.9.0",
+    "interface": "lo",
+    "capabilities": [
+      "CAP_NET_ADMIN",
+      "CAP_NET_RAW"
+    ],
+    "fixture_bytes": 8388608
+  },
+  "results": [
+    {
+      "profile": "baseline",
+      "fixture_bytes": 33554432,
+      "status": "passed",
+      "duration_ms": 5137,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "latency_150ms",
+      "fixture_bytes": 33554432,
+      "status": "passed",
+      "duration_ms": 29551,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "jitter_150ms_30ms",
+      "fixture_bytes": 33554432,
+      "status": "passed",
+      "duration_ms": 205261,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "loss_1pct",
+      "fixture_bytes": 33554432,
+      "status": "passed",
+      "duration_ms": 5144,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "rate_5mbit",
+      "fixture_bytes": 33554432,
+      "status": "passed",
+      "duration_ms": 134250,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "composite_150ms_jitter_1pct_5mbit",
+      "fixture_bytes": 8388608,
+      "status": "passed",
+      "duration_ms": 237015,
+      "forced_outage_ms": 0,
+      "forced_outage_recoveries": 0
+    },
+    {
+      "profile": "short_outage_5s",
+      "fixture_bytes": 8388608,
+      "status": "passed",
+      "duration_ms": 238227,
+      "forced_outage_ms": 5134,
+      "forced_outage_recoveries": 1
+    }
+  ],
+  "final_sha256": "11606d850462813d089044c75decd1b1eeb068bfdfa42630f13f2b97153fff5b",
+  "sha256_fixture": "deterministic bytes index*31 modulo 256",
+  "cache_cleanup": "passed after removing residue from an intentionally interrupted composite run",
+  "protocol_reconnect_count": "unavailable from sendmer 0.11.0 public events. forced_outage_recoveries records the injected outage recovery."
+}
