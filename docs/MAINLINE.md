@@ -4,6 +4,17 @@
 并与 `sendmer v0.11.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
 当前架构或未来计划。
 
+## 1.1 2026-11-24 核心简化迁移边界
+
+sendmer 核心仓库已完成职责拆分，公开主要入口为 `send_handle(path, options)` 和
+`receive(ticket, options)`。事件、取消和资源上限入口保留一个兼容周期。核心模块现在负责
+transport、transfer、manifest、recovery、filesystem 和 events 的职责。
+
+本仓库当前继续使用 crates.io 的 `sendmer 0.11.0`。桌面端暂时保留现有适配调用，避免引用
+尚未发布的核心 API。核心新版本发布后，`src/transfer.rs` 应切换到
+`send_handle_with_events` 和 `receive_with_events_and_cancellation`，然后重新执行桌面测试和
+真实窗口验收。桌面端继续负责 GPUI 状态、偏好、历史、本地化和更新界面，不读取核心缓存布局。
+
 ## 1. 术语表与命名约定
 
 | 规范名称 | English / 缩写 | 职责边界 | 不代表什么 |
