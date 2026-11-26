@@ -1,7 +1,7 @@
 # AlterSendmer 主线设计与开发计划
 
 本文是 AlterSendmer 唯一的主线设计与开发计划。它合并了原 GPUI 设计说明与阶段开发计划，
-并与 `sendmer v0.11.0` 的公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
+并与当前依赖的 sendmer 公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
 当前架构或未来计划。
 
 ## 1.1 2026-11-24 核心简化迁移边界
@@ -10,10 +10,15 @@ sendmer 核心仓库已完成职责拆分，公开主要入口为 `send_handle(p
 `receive(ticket, options)`。事件、取消和资源上限入口保留一个兼容周期。核心模块现在负责
 transport、transfer、manifest、recovery、filesystem 和 events 的职责。
 
-本仓库当前继续使用 crates.io 的 `sendmer 0.11.0`。桌面端暂时保留现有适配调用，避免引用
-尚未发布的核心 API。核心新版本发布后，`src/transfer.rs` 应切换到
-`send_handle_with_events` 和 `receive_with_events_and_cancellation`，然后重新执行桌面测试和
-真实窗口验收。桌面端继续负责 GPUI 状态、偏好、历史、本地化和更新界面，不读取核心缓存布局。
+本仓库的 C12.5 迁移使用 crates.io 已发布的 `sendmer 0.12.0`，通过 crate 根部
+`send_handle_with_events`、`receive_with_events_and_cancellation` 和 `ReceiveOptions`
+适配原有生命周期、事件、取消、重试及缓存配置，不引用 `sendmer::core::*`。
+诊断报告同步记录依赖版本。保留历史发布记录与 GPUI 状态、偏好、历史、本地化和更新界面；
+本次不改变桌面版本号，也不发布新版本。AlterSendmer 与 sendmer 同步维护；
+已停止维护的是独立的旧项目 AlterSendme，不应与 AlterSendmer 混淆。
+Linux x86_64 / Rust 1.100.0 使用 crates.io 0.12.0 的 format、大小检查、全目标 check、
+严格 Clippy 及 55 项应用测试通过，包括跨进程文件/manifest 传输、事件和取消。
+CI 增加 workspace tests；原生窗口和真实弱网体验不计入本地自动验收。
 
 ## 1. 术语表与命名约定
 
@@ -67,7 +72,7 @@ flowchart LR
         EVENT["Event Projection"]
     end
 
-    CORE["sendmer 0.11.0\nPublic API"]
+    CORE["sendmer 0.12.0\nPublic API"]
     NET["iroh / TLS / QUIC / Relay"]
     PEER["Remote sendmer peer"]
     FS["Local Filesystem"]

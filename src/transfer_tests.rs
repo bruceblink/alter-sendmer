@@ -1,16 +1,15 @@
 //! sendmer 适配器的跨进程和配置回归测试。
 
 use super::{
-    MEBIBYTE, ReceiveTransferOptions, SendTransferOptions, max_receivers_from_preference,
-    max_upload_rate_from_mib, receive_cache_options, session_lifetime_from_seconds, start_receive,
-    start_send,
+    MEBIBYTE, SendTransferOptions, max_receivers_from_preference, max_upload_rate_from_mib,
+    receive_cache_options, session_lifetime_from_seconds, start_receive, start_send,
 };
 use async_channel::unbounded;
 use iroh::EndpointAddr;
 use iroh_blobs::{BlobFormat, Hash, ticket::BlobTicket};
 use sendmer::{
-    RelayModeOption, Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION, TransferEvent,
-    TransferEventData,
+    ReceiveOptions, RelayModeOption, Role, SenderTransferStatus, TRANSFER_EVENT_SCHEMA_VERSION,
+    TransferEvent, TransferEventData,
 };
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -135,13 +134,13 @@ fn worker_receiver() {
     let result = runtime
         .block_on(start_receive(
             ticket,
-            output,
             event_sender,
             41,
-            ReceiveTransferOptions {
+            ReceiveOptions {
+                output_dir: Some(output),
                 relay_mode: RelayModeOption::Disabled,
-                retry_policy: Default::default(),
                 receive_cache,
+                ..Default::default()
             },
             watch::channel(false).1,
         ))
@@ -353,13 +352,12 @@ fn adapter_forwards_pre_cancelled_receive_and_cleans_staging() {
     let error = runtime
         .block_on(start_receive(
             ticket.to_string(),
-            output_dir.path().to_path_buf(),
             event_sender,
             7,
-            ReceiveTransferOptions {
+            ReceiveOptions {
+                output_dir: Some(output_dir.path().to_path_buf()),
                 relay_mode: RelayModeOption::Disabled,
-                retry_policy: Default::default(),
-                receive_cache: None,
+                ..Default::default()
             },
             cancellation,
         ))

@@ -7094,9 +7094,9 @@ checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "sendmer"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9477e715f2c63b09b3965c6cb298b133141a2c8c9f1df0938dfe411f4e4d85b4"
+checksum = "585ccb4e1850946950488106136fd5bae09cc6c0b476543fb265e53f20acef49"
 dependencies = [
  "anyhow",
  "clap",
@@ -7114,6 +7114,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "walkdir",

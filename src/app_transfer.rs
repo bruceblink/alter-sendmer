@@ -359,26 +359,22 @@ impl AlterSendmeApp {
         } else {
             sendmer::RelayModeOption::Default
         };
-        let retry_policy = sendmer::core::options::ReceiveRetryPolicy {
-            download_retry_limit: self.preferences.retry_limit,
-            size_fetch_retry_limit: self.preferences.retry_limit,
-            size_fetch_chunk_size: self.preferences.download_limit_mb as u64 * 1024 * 1024,
+        // The published 0.12.0 crate exposes ReceiveOptions at its root,
+        // but not the name of its retry policy type. Configure it through the
+        // public field rather than importing an implementation module.
+        let mut options = sendmer::ReceiveOptions {
+            output_dir: Some(output_dir),
+            relay_mode,
+            receive_cache,
             ..Default::default()
         };
+        options.retry_policy.download_retry_limit = self.preferences.retry_limit;
+        options.retry_policy.size_fetch_retry_limit = self.preferences.retry_limit;
+        options.retry_policy.size_fetch_chunk_size =
+            self.preferences.download_limit_mb as u64 * 1024 * 1024;
         let task = tokio::spawn(async move {
-            let result = transfer::start_receive(
-                ticket,
-                output_dir,
-                events,
-                generation,
-                transfer::ReceiveTransferOptions {
-                    relay_mode,
-                    retry_policy,
-                    receive_cache,
-                },
-                cancel_receiver,
-            )
-            .await;
+            let result =
+                transfer::start_receive(ticket, events, generation, options, cancel_receiver).await;
             let _ = done_sender.send(());
             result
         });
