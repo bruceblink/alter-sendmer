@@ -3,7 +3,7 @@
 use async_channel::Sender;
 use sendmer::{
     AddrInfoOptions, AppHandle, EventEmitter, ReceiveCacheOptions, ReceiveOptions, RelayModeOption,
-    SendOptions, TransferEvent, send_handle,
+    SendOptions, TransferEvent, send_handle_with_events,
 };
 use std::{num::NonZeroU64, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::watch;
@@ -15,13 +15,6 @@ const MEBIBYTE: u64 = 1024 * 1024;
 pub struct ChannelEventEmitter {
     pub sender: Sender<(u64, TransferEvent)>,
     pub generation: u64,
-}
-
-/// Groups receive-side transport policy so UI callers cannot misorder related arguments.
-pub(crate) struct ReceiveTransferOptions {
-    pub relay_mode: RelayModeOption,
-    pub retry_policy: sendmer::core::options::ReceiveRetryPolicy,
-    pub receive_cache: Option<ReceiveCacheOptions>,
 }
 
 /// Groups sender-side policy so UI callers pass one coherent public API mapping.
@@ -126,26 +119,17 @@ pub async fn start_send(
         max_import_memory_bytes: None,
         session_lifetime: session_lifetime_from_seconds(transfer_options.session_lifetime_seconds)?,
     };
-    send_handle(path, options, emitter(sender, generation)).await
+    send_handle_with_events(path, options, emitter(sender, generation)).await
 }
 
 pub async fn start_receive(
     ticket: String,
-    output_dir: PathBuf,
     sender: Sender<(u64, TransferEvent)>,
     generation: u64,
-    transfer_options: ReceiveTransferOptions,
+    options: ReceiveOptions,
     cancellation: watch::Receiver<bool>,
 ) -> anyhow::Result<sendmer::ReceiveResult> {
-    let options = ReceiveOptions {
-        output_dir: Some(output_dir),
-        relay_mode: transfer_options.relay_mode,
-        magic_ipv4_addr: None,
-        magic_ipv6_addr: None,
-        retry_policy: transfer_options.retry_policy,
-        receive_cache: transfer_options.receive_cache,
-    };
-    sendmer::receive_with_cancellation(
+    sendmer::receive_with_events_and_cancellation(
         ticket,
         options,
         emitter(sender, generation),
