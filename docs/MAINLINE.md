@@ -4,19 +4,20 @@
 并与当前依赖的 sendmer 公开契约对齐。旧 Tauri 客户端迁移说明继续独立保留，但不再承担
 当前架构或未来计划。
 
-## 1.1 2026-11-24 核心简化迁移边界
+## 1.1 2026-11-27 核心简化迁移边界
 
 sendmer 核心仓库已完成职责拆分，公开主要入口为 `send_handle(path, options)` 和
 `receive(ticket, options)`。事件、取消和资源上限入口保留一个兼容周期。核心模块现在负责
 transport、transfer、manifest、recovery、filesystem 和 events 的职责。
 
-本仓库的 C12.5 迁移使用 crates.io 已发布的 `sendmer 0.12.0`，通过 crate 根部
+本仓库的 C12.5 迁移使用 crates.io 已发布的 `sendmer 0.13.0`，通过 crate 根部
 `send_handle_with_events`、`receive_with_events_and_cancellation` 和 `ReceiveOptions`
 适配原有生命周期、事件、取消、重试及缓存配置，不引用 `sendmer::core::*`。
+依赖同时启用 `manifest` 和 `persistent-recovery` features，以支持 TM1 manifest 和持久接收缓存。
 诊断报告同步记录依赖版本。保留历史发布记录与 GPUI 状态、偏好、历史、本地化和更新界面；
-本次不改变桌面版本号，也不发布新版本。AlterSendmer 与 sendmer 同步维护；
+本次发布桌面版本 `v0.8.0`。AlterSendmer 与 sendmer 同步维护；
 已停止维护的是独立的旧项目 AlterSendme，不应与 AlterSendmer 混淆。
-Linux x86_64 / Rust 1.100.0 使用 crates.io 0.12.0 的 format、大小检查、全目标 check、
+Linux x86_64 / Rust 1.100.0 使用 crates.io 0.13.0 的 format、大小检查、全目标 check、
 严格 Clippy 及 55 项应用测试通过，包括跨进程文件/manifest 传输、事件和取消。
 CI 增加 workspace tests；原生窗口和真实弱网体验不计入本地自动验收。
 
@@ -40,7 +41,7 @@ CI 增加 workspace tests；原生窗口和真实弱网体验不计入本地自�
 
 ## 2. 产品边界与当前基线
 
-本版 `AlterSendmer v0.7.1` 使用 crates.io 的 `sendmer 0.11.0` 和 `gpui-kit 0.10.0`。
+本版 `AlterSendmer v0.8.0` 使用 crates.io 的 `sendmer 0.13.0` 和 `gpui-kit 0.10.0`。
 自 `v0.7.0` 起，桌面客户端通过 GPUI Kit 加载原生平台后端。
 桌面客户端
 提供不依赖账号、服务器或云端存储的原生点对点文件传输。传输票据是 bearer capability：
@@ -72,7 +73,7 @@ flowchart LR
         EVENT["Event Projection"]
     end
 
-    CORE["sendmer 0.12.0\nPublic API"]
+    CORE["sendmer 0.13.0\nPublic API"]
     NET["iroh / TLS / QUIC / Relay"]
     PEER["Remote sendmer peer"]
     FS["Local Filesystem"]
@@ -178,13 +179,13 @@ Idle -> Connecting -> Metadata -> Transporting -> Exporting -> Finalizing -> Com
 | --- | --- |
 | Windows x64、ARM64 | NSIS 安装器、便携 ZIP。自动更新使用 NSIS 安装器 |
 | Linux amd64、ARM64 | AppImage、DEB。自动更新使用 AppImage |
-| macOS Apple Silicon、Intel | DMG、应用更新归档 |
+| macOS Apple Silicon | DMG、应用更新归档 |
 
 更新归档由 cargo-packager 使用同一 minisign 信任链签名；`latest.json` 按 `OS-ARCH` 映射下载
 地址、签名和安装格式。客户端只在签名验证通过后进入安装路径；启动时静默检查，用户主动检查
 时才展示最新状态或错误。
 
-CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Release 在六个原生执行器
+CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Release 在五个原生执行器
 上构建，核对安装包中的二进制架构。汇总作业使用应用内置公钥验证更新签名，并验证最终校验和。
 每个发布批次同时上传包、
 `SHA256SUMS`、SPDX SBOM、Sigstore bundle 和 GitHub provenance attestation；签名与证明校验
@@ -200,7 +201,8 @@ CI 在 Windows、Ubuntu 和 macOS 执行 fmt、check、Clippy 和 tests。Releas
 | `v0.6.0` | `0.10.0` | 会话生命周期、接收方上限、TM1 选择、跨进程兼容回归和 Windows 原生截图验收 |
 | `v0.7.0` | `0.11.0` | 诊断报告导出、票据与焦点修复、传输事件流校验、GPUI Kit 依赖迁移 |
 | `v0.7.1` | `0.11.0` | 修复 macOS 应用图标 |
-| `v0.7.3` | `0.11.0` | 六平台原生打包、macOS Intel、Windows ARM64、Linux ARM64、完整应用包签名和统一二进制名 |
+| `v0.7.3` | `0.11.0` | 六平台原生打包、Windows ARM64、Linux ARM64、完整应用包签名和统一二进制名 |
+| `v0.8.0` | `0.13.0` | 公开 API 适配、TM1 manifest 与持久接收缓存 feature、五目标原生打包和 ARM64-only macOS 发布 |
 
 `v0.6.0` 只消费 sendmer 已发布能力，不引入账号、云存储、后台同步、
 内核级网络故障注入或跨设备永久续传。
@@ -279,7 +281,7 @@ AlterSendmer 只借鉴可验证的产品能力，不把 LocalSend REST 混入 se
 [croc bundle reconnect test](https://github.com/schollz/croc/blob/main/src/croc/bundle_test.go)。
 
 当前实现切片已增加 `recovery.json`、manifest 摘要、chunk size/count、已验证字节、恢复次数和
-恢复状态展示。核心分块校验与缺失范围恢复继续由 sendmer 0.11.0 负责。弱网脚本和运行字段见
+恢复状态展示。核心分块校验与缺失范围恢复继续由 sendmer 0.13.0 负责。弱网脚本和运行字段见
 `scripts/weaknet-baseline.sh` 与 `docs/weak-network-acceptance.md`。
 
 #### P2 局域网发现和连接选择
@@ -328,7 +330,7 @@ LocalSend 的 CLI 已覆盖文件、目录和混合输入。croc 还提供多文
 
 #### P6 发布和运维
 
-- 继续用六个原生执行器生成 Windows x64/ARM64、Linux amd64/ARM64、macOS ARM64/Intel。
+- 继续用五个原生执行器生成 Windows x64/ARM64、Linux amd64/ARM64、macOS ARM64。
 - 发布前核对应用内部二进制名、安装器名、更新清单、minisign、Sigstore、SBOM、provenance
   和 SHA-256 是否指向同一批文件。
 - 为 relay 增加首帧超时、握手期限、每源并发上限、消息大小限制、磁盘配额和临时文件回收。

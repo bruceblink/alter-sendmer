@@ -39,7 +39,7 @@ at [`bruceblink/alter-sendme`](https://github.com/bruceblink/alter-sendme).
 ## Install
 
 Download installers from the Release for Windows x64 and ARM64, Linux amd64 and ARM64, or macOS
-Apple Silicon and Intel. Windows offers NSIS and portable ZIP, Linux offers AppImage and DEB,
+Apple Silicon. Windows offers NSIS and portable ZIP, Linux offers AppImage and DEB,
 and macOS offers a DMG. See
 [GitHub Releases](https://github.com/bruceblink/alter-sendmer/releases/latest). `SHA256SUMS` covers
 the published packages and supply-chain evidence. Releases also contain an SPDX SBOM, Sigstore
@@ -63,9 +63,11 @@ cargo run
 ```
 
 The application uses the published `gpui-kit` 0.10.0 crate for GPUI and its native backends. It consumes the
-published [`sendmer`](https://crates.io/crates/sendmer) `0.12.0` crate through its opaque
+published [`sendmer`](https://crates.io/crates/sendmer) `0.13.0` crate through its opaque
 `SendHandle` lifecycle API and versioned event envelope, so a clean checkout does not depend on a
 sibling directory or Git revision.
+The `manifest` and `persistent-recovery` features are enabled explicitly because the desktop client
+uses TM1 manifests and persistent receive-cache recovery.
 The optional upload limit is entered in MiB/s and converted to sendmer's shared payload bytes/s limit;
 `Unlimited` remains the default and the desktop client does not implement a separate limiter.
 The receive cache is also implemented by sendmer rather than the desktop client. It is enabled by
@@ -91,7 +93,7 @@ an ad hoc signature on the full application bundle. Gatekeeper may still block a
 until the build is signed with Developer ID and notarized.
 
 Release package filenames use `AlterSendmer-<version>-<platform>-<arch>`, for example
-`AlterSendmer-0.7.2-macos-arm64.dmg`. Release tags build and sign all three operating-system packages,
+`AlterSendmer-0.8.0-macos-arm64.dmg`. Release tags build and sign all three operating-system packages,
 generate `latest.json`, `SHA256SUMS`, an SPDX SBOM, Sigstore bundles, and a GitHub provenance
 attestation, then publish the complete asset groups. The release workflow builds target packages
 only for a pushed `v*` release tag. The minisign private key is stored only in

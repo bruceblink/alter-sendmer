@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('windows-x86_64', 'windows-aarch64', 'linux-x86_64', 'linux-aarch64', 'macos-aarch64', 'macos-x86_64')]
+    [ValidateSet('windows-x86_64', 'windows-aarch64', 'linux-x86_64', 'linux-aarch64', 'macos-aarch64')]
     [string]$Target,
     [Parameter(Mandatory = $true)]
     [string]$Directory
@@ -20,7 +20,6 @@ $platform = @{
     'linux-x86_64' = 'linux-amd64'
     'linux-aarch64' = 'linux-arm64'
     'macos-aarch64' = 'macos-arm64'
-    'macos-x86_64' = 'macos-x86_64'
 }[$Target]
 $suffixes = switch -Wildcard ($Target) {
     'windows-*' { '-setup.exe' }

@@ -29,10 +29,6 @@ TARGETS = {
     "windows-arm64": Target("windows-11-arm", "Windows", "ARM64", ("aarch64-pc-windows-msvc",)),
     "windows-x86": Target("windows-2025", "Windows", "X64", ("i686-pc-windows-msvc",), "wow64"),
     "macos-arm64": Target("macos-26", "macOS", "ARM64", ("aarch64-apple-darwin",)),
-    "macos-x86_64": Target("macos-26-intel", "macOS", "X64", ("x86_64-apple-darwin",)),
-    "macos-universal": Target(
-        "macos-26", "macOS", "ARM64", ("aarch64-apple-darwin", "x86_64-apple-darwin"), "universal"
-    ),
     "linux-amd64": Target("ubuntu-24.04", "Linux", "X64", ("x86_64-unknown-linux-gnu",)),
     "linux-arm64": Target("ubuntu-24.04-arm", "Linux", "ARM64", ("aarch64-unknown-linux-gnu",)),
     "linux-i386": Target("ubuntu-24.04", "Linux", "X64", ("i686-unknown-linux-gnu",), "multilib"),

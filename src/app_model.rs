@@ -51,7 +51,7 @@ pub(crate) enum TransferPhase {
 }
 
 // Keep the diagnostic contract explicit because Rust does not expose dependency versions at runtime.
-pub(crate) const SENDMER_VERSION: &str = "0.12.0";
+pub(crate) const SENDMER_VERSION: &str = "0.13.0";
 
 impl TransferPhase {
     pub(crate) fn is_active(self) -> bool {

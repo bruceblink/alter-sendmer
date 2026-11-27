@@ -62,7 +62,6 @@ $manifest = [ordered]@{
         'linux-x86_64' = Resolve-UpdateAsset 'linux-amd64.AppImage' 'appimage'
         'linux-aarch64' = Resolve-UpdateAsset 'linux-arm64.AppImage' 'appimage'
         'macos-aarch64' = Resolve-UpdateAsset 'macos-arm64.app.tar.gz' 'app'
-        'macos-x86_64' = Resolve-UpdateAsset 'macos-x86_64.app.tar.gz' 'app'
     }
 }
 

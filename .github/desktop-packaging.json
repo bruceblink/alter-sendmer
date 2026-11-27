@@ -63,26 +63,6 @@
         "verify"
       ]
     },
-    "macos-x86_64": {
-      "formats": [
-        "dmg",
-        "app.tar.gz"
-      ],
-      "minisign": [
-        "dmg",
-        "app.tar.gz"
-      ],
-      "package": [
-        "python",
-        "scripts/ci-packages.py",
-        "package"
-      ],
-      "verify": [
-        "python",
-        "scripts/ci-packages.py",
-        "verify"
-      ]
-    },
     "linux-amd64": {
       "formats": [
         "deb",

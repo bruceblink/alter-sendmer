@@ -359,7 +359,7 @@ impl AlterSendmeApp {
         } else {
             sendmer::RelayModeOption::Default
         };
-        // The published 0.12.0 crate exposes ReceiveOptions at its root,
+        // The published 0.13.0 crate exposes ReceiveOptions at its root,
         // but not the name of its retry policy type. Configure it through the
         // public field rather than importing an implementation module.
         let mut options = sendmer::ReceiveOptions {
